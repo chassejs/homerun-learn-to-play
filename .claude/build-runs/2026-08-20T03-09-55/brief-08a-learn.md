@@ -95,7 +95,16 @@ tier's `heroFallback` SVG** (`HRL_SVG[fallback.svg](fallback.opts)`). A missing
 hero image must never show a broken-image icon.
 
 **Objectives** (`.chapter-objectives`): the chapter's `objectives` as a list,
-introduced by "After this chapter you can…".
+introduced by a single "After this chapter you can…" lead-in.
+
+**Important:** the authored objective strings themselves mostly begin with the
+literal words "After this chapter you can " — rendering the lead-in *and* the
+raw string produces "After this chapter you can… After this chapter you can say
+what each team is trying to do." **Strip that prefix (case-insensitive, and also
+the variants "After this chapter, you can " and "After this chapter you will be
+able to ") from each objective before rendering, then lower-case the first letter
+of what remains** unless it is a proper noun or an acronym. An objective that
+does not carry the prefix renders as authored.
 
 **Sections**: render each section by `type`. Handle **all ten** types:
 
@@ -165,3 +174,18 @@ title and scroll the reader to the top on every render.
 5. Every function you call on `HRL_PROGRESS`, `HRL_SHELL`, `HRL_SVG`, and
    `HRL_MODAL`, with the signature you assumed.
 6. Any deviation from this brief, and why.
+
+---
+
+## CONTRACT ADDENDUM — what `shell.js` already calls (match these exactly)
+
+`shell.js` is written and on disk. **Read it** and conform to these:
+
+- `HRL_LEARN.renderPath()`
+- `HRL_LEARN.renderChapter(chapterId)`
+- `HRL_LEARN.renderGlossary()`
+- `HRL_SHELL.showView('path', { scrollToTier: 'rookie' })` scrolls to a tier by
+  looking for **`[data-tier="<tierKey>"]` inside `#view-path`**. Your
+  `renderPath()` **must put a `data-tier="<tierKey>"` attribute on each tier
+  block** or that navigation silently does nothing.
+- `HRL_SHELL.toast(message, kind, opts)` — the third argument is optional.

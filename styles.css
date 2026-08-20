@@ -1003,6 +1003,16 @@ textarea {
 }
 .section-prose p { margin: 0.45rem 0; }
 
+/* Every HRL_SVG diagram sizes from its viewBox: width 100%, height derived.
+   The root <svg> deliberately carries no height attribute — "auto" is invalid
+   there — so the aspect ratio is resolved here instead. */
+.hrl-svg {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+}
+
 .section-diagram {
   margin: 0.75rem 0 0.5rem;
   padding: 0.75rem;

@@ -236,3 +236,22 @@ Onboarding placement.
    `HRL_QUESTIONS`, `HRL_SVG`, and `HRL_MODAL`, with the signature you assumed.
 4. Every CSS class you emit that is **not** already in `styles.css`.
 5. Any deviation from this brief, and why.
+
+---
+
+## CONTRACT ADDENDUM — what `shell.js` already calls (match these exactly)
+
+`shell.js` is written and on disk. It calls into your modules with these exact
+signatures. **Read `shell.js` and conform to it** rather than to any guess:
+
+- `HRL_QUIZ.start(chapterId)`
+- `HRL_QUIZ.renderReviewDeck()`
+- `HRL_IQ.renderIntro()`
+- `HRL_PLACEMENT.start({ skippable: true, onSkip: fn, onComplete: fn })`
+  — accept an options object. `onSkip` is called when the learner chooses
+  "Start from the very beginning"; `onComplete(placementResult)` is called when
+  placement finishes. Both may be undefined — guard them. Extra properties are ignored.
+
+Note also that `versionCompat.js` exposes **`isImportCompatible(dataVersion)`**
+and **`applyMigrations(data, migrationPath)`** — there is no `prepareImport`.
+`progress.js` already handles import; you do not need to touch version compat.

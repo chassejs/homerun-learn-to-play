@@ -393,7 +393,7 @@
     if (opts.className) cls += ' ' + String(opts.className);
     return '<svg xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="' +
       tid + ' ' + did + '" viewBox="0 0 ' + vw + ' ' + vh +
-      '" preserveAspectRatio="xMidYMid meet" width="100%" height="auto" class="' +
+      '" preserveAspectRatio="xMidYMid meet" width="100%" class="' +
       esc(cls) + '">' +
       '<title id="' + tid + '">' + esc(title) + '</title>' +
       '<desc id="' + did + '">' + esc(desc) + '</desc>' +
