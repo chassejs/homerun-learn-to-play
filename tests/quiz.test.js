@@ -220,6 +220,75 @@ test('dueDateFor: boxes 1–5 produce now + [1,3,7,16,35] * 86400000', function 
   }
 });
 
+console.log('\nadvanceIndex / isStale');
+
+test('advanceIndex and isStale are exported functions', function () {
+  assert(typeof quiz.advanceIndex === 'function', 'advanceIndex');
+  assert(typeof quiz.isStale === 'function', 'isStale');
+});
+
+test('advancing from the last index yields the finished state rather than an out-of-range index', function () {
+  const state = { index: 3, finished: false, renderToken: 1 };
+  const result = quiz.advanceIndex(state, 4);
+  assertEqual(result.finished, true, 'finished');
+  assertEqual(state.finished, true, 'state.finished');
+  assertEqual(result.index, 3, 'returned index');
+  assertEqual(state.index, 3, 'state.index stays on the last in-range question');
+  assert(state.index < 4, 'index must not run past the end');
+  assert(state.index >= 0, 'index must stay non-negative');
+});
+
+test('calling advanceIndex repeatedly after finishing does not increment past the end and does not report a second completion', function () {
+  const state = { index: 2, finished: false };
+  let completions = 0;
+  const onComplete = function () { completions += 1; };
+  const first = quiz.advanceIndex(state, 3, onComplete);
+  assertEqual(first.finished, true, 'first call finishes');
+  assertEqual(completions, 1, 'first completion');
+  assertEqual(state.index, 2, 'index after first finish');
+
+  const second = quiz.advanceIndex(state, 3, onComplete);
+  assertEqual(second.finished, true, 'still finished');
+  assertEqual(second.index, 2, 'returned index after repeat');
+  assertEqual(state.index, 2, 'state.index after repeat');
+  assertEqual(completions, 1, 'no second completion');
+
+  quiz.advanceIndex(state, 3, onComplete);
+  quiz.advanceIndex(state, 3, onComplete);
+  assertEqual(state.index, 2, 'index unchanged after more repeats');
+  assertEqual(completions, 1, 'still a single completion');
+});
+
+test('a handler carrying a stale render token is a no-op: state is unchanged', function () {
+  const state = { index: 1, finished: false, renderToken: 7 };
+  const snapshot = JSON.stringify(state);
+  const staleToken = 6;
+  assert(quiz.isStale(state, staleToken) === true, 'old token is stale');
+  assertEqual(JSON.stringify(state), snapshot, 'isStale must not mutate state');
+  if (!quiz.isStale(state, staleToken)) {
+    quiz.advanceIndex(state, 4);
+  }
+  assertEqual(state.index, 1, 'stale handler must not advance index');
+  assertEqual(state.finished, false, 'stale handler must not finish');
+  assertEqual(state.renderToken, 7, 'stale handler must not bump token');
+  assert(quiz.isStale(state, 7) === false, 'current token is live');
+  assert(quiz.isStale(null, 7) === true, 'missing state is stale');
+});
+
+test('the completion callback fires exactly once across repeated advance calls', function () {
+  const state = { index: 0, finished: false };
+  let completions = 0;
+  const onComplete = function () { completions += 1; };
+  let i;
+  for (i = 0; i < 10; i++) {
+    quiz.advanceIndex(state, 3, onComplete);
+  }
+  assertEqual(state.finished, true, 'walked to finished');
+  assert(state.index < 3, 'index stays in range');
+  assertEqual(state.index, 2, 'lands on the last in-range index');
+  assertEqual(completions, 1, 'onComplete fires exactly once');
+});
+
 console.log('\n----------------------------------------');
 console.log('Results: ' + passed + ' passed, ' + failed + ' failed');
 if (global.__HRL_TEST_RUNNER && typeof global.__HRL_TEST_RUNNER.record === 'function') {

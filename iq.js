@@ -286,6 +286,47 @@
     return 'Pro Mind';
   }
 
+  function isStale(state, token) {
+    if (!state) return true;
+    return token !== state.renderToken;
+  }
+
+  function advanceIndex(state, total, onComplete) {
+    var n;
+    var next;
+    if (!state) {
+      return { index: 0, finished: true };
+    }
+    if (state.finished) {
+      return { index: state.index, finished: true };
+    }
+    n = Number(total);
+    if (isNaN(n) || n < 0) n = 0;
+    next = Number(state.index);
+    if (isNaN(next)) next = 0;
+    next = next + 1;
+    if (next >= n) {
+      state.finished = true;
+      if (n > 0) {
+        if (typeof state.index !== 'number' || isNaN(state.index) || state.index < 0 || state.index >= n) {
+          state.index = n - 1;
+        }
+      } else {
+        state.index = 0;
+      }
+      if (typeof onComplete === 'function') onComplete();
+      return { index: state.index, finished: true };
+    }
+    state.index = next;
+    return { index: state.index, finished: false };
+  }
+
+  function nextRenderToken(state) {
+    if (!state) return 0;
+    state.renderToken = (typeof state.renderToken === 'number' ? state.renderToken : 0) + 1;
+    return state.renderToken;
+  }
+
   function topicBreakdown(presented) {
     var out;
     var i;
@@ -350,13 +391,15 @@
   }
 
   function startTimer() {
+    var token;
     clearTimer();
-    if (!test || !test.timerOn) return;
+    if (!test || !test.timerOn || test.finished) return;
+    token = test.renderToken;
     test.remaining = TIMER_SECONDS;
     test.reducedMotion = prefersReducedMotion();
     updateTimerLabel();
     timerId = setInterval(function () {
-      if (!test) {
+      if (!test || test.finished || isStale(test, token)) {
         clearTimer();
         return;
       }
@@ -505,7 +548,7 @@
     var arr;
     var j;
     var tmp;
-    if (!test || test.locked) return;
+    if (!test || test.finished || test.locked) return;
     arr = test.orderWorking;
     j = idx + dir;
     if (j < 0 || j >= arr.length) return;
@@ -515,13 +558,14 @@
     renderQuestion();
   }
 
-  function bindHotspots(container) {
+  function bindHotspots(container, token) {
     var nodes;
     var i;
     function onActivate(ev) {
       var id;
       var key;
-      if (!test || test.locked) return;
+      if (!test || test.finished || isStale(test, token)) return;
+      if (test.locked) return;
       if (ev.type === 'keydown') {
         key = ev.key || ev.keyCode;
         if (key !== 'Enter' && key !== ' ' && key !== 'Spacebar' && key !== 13 && key !== 32) return;
@@ -570,15 +614,22 @@
     var itemText;
     var diagramWrap;
     var timerNote;
+    var token;
     if (!test) return;
     host = hostEl();
     if (!host) return;
     setViewHeading(true);
+    if (test.finished) {
+      if (!host.firstChild) finishTest();
+      else ensureHostNotEmpty(host);
+      return;
+    }
     q = test.current;
     if (!q) {
       finishTest();
       return;
     }
+    token = nextRenderToken(test);
     host.innerHTML = '';
     shell = el('div', { class: 'quiz-shell' });
     shell.appendChild(el('p', { class: 'hint', text: 'Baseball IQ — no feedback until the end.' }));
@@ -599,7 +650,7 @@
     if (q.type === 'hotspot') {
       diagramWrap = el('div', { class: 'quiz-hotspot', html: renderDiagramHtml(q) });
       shell.appendChild(diagramWrap);
-      bindHotspots(diagramWrap);
+      bindHotspots(diagramWrap, token);
     } else if (q.type === 'order') {
       if (!test.orderWorking || !test.orderWorking.length) {
         test.orderWorking = (q.presentedItems && q.presentedItems.length)
@@ -627,8 +678,14 @@
         if (i === 0) up.disabled = true;
         if (i === test.orderWorking.length - 1) down.disabled = true;
         (function (idx) {
-          up.addEventListener('click', function () { moveOrder(idx, -1); });
-          down.addEventListener('click', function () { moveOrder(idx, 1); });
+          up.addEventListener('click', function () {
+            if (!test || test.finished || isStale(test, token)) return;
+            moveOrder(idx, -1);
+          });
+          down.addEventListener('click', function () {
+            if (!test || test.finished || isStale(test, token)) return;
+            moveOrder(idx, 1);
+          });
         }(i));
         btns.appendChild(up);
         btns.appendChild(down);
@@ -639,6 +696,8 @@
       shell.appendChild(list);
       btn = el('button', { type: 'button', class: 'btn btn-primary', text: 'Confirm order' });
       btn.addEventListener('click', function () {
+        if (!test || test.finished || isStale(test, token)) return;
+        btn.disabled = true;
         submitAnswer(test.orderWorking.slice(), false);
       });
       shell.appendChild(btn);
@@ -651,16 +710,20 @@
           text: String(q.choices[i]),
           role: 'listitem'
         });
-        (function (idx) {
-          btn.addEventListener('click', function () {
+        (function (idx, choiceBtn) {
+          choiceBtn.addEventListener('click', function () {
+            if (!test || test.finished || isStale(test, token)) return;
+            if (test.locked) return;
+            choiceBtn.disabled = true;
             submitAnswer(idx, false);
           });
-        }(i));
+        }(i, btn));
         list.appendChild(btn);
       }
       shell.appendChild(list);
     }
     host.appendChild(shell);
+    ensureHostNotEmpty(host);
   }
 
   function submitAnswer(response, timedOut) {
@@ -668,9 +731,13 @@
     var correct;
     var row;
     var P;
-    if (!test || test.locked) return;
+    var step;
+    if (!test || test.finished || test.locked) return;
     q = test.current;
-    if (!q) return;
+    if (!q) {
+      finishTest();
+      return;
+    }
     test.locked = true;
     clearTimer();
     correct = timedOut ? false : isCorrect(q, response);
@@ -691,7 +758,8 @@
     if (!correct && P && typeof P.addMiss === 'function' && q.id) {
       P.addMiss(q.id, Date.now());
     }
-    if (test.presented.length >= TEST_LENGTH) {
+    step = advanceIndex(test, TEST_LENGTH);
+    if (step.finished) {
       finishTest();
       return;
     }
@@ -837,7 +905,13 @@
     clearTimer();
     if (!test) return;
     host = hostEl();
-    if (!host) return;
+    if (test.resultShown) {
+      ensureHostNotEmpty(host);
+      return;
+    }
+    test.finished = true;
+    test.resultShown = true;
+    nextRenderToken(test);
     setViewHeading(true);
     bbiq = computeBbiq(test.presented);
     band = bandFor(bbiq);
@@ -845,6 +919,7 @@
     answers = [];
     for (i = 0; i < test.presented.length; i++) {
       item = test.presented[i];
+      if (!item) continue;
       answers.push({
         id: item.id,
         topic: item.topic,
@@ -865,7 +940,7 @@
       test.recorded = true;
     }
 
-    host.innerHTML = '';
+    if (!host) return;
     shell = el('div', { class: 'quiz-shell' });
     shell.appendChild(el('div', { class: 'quiz-result' }, [
       el('p', { class: 'bbiq-score', text: String(bbiq) }),
@@ -906,6 +981,7 @@
     review.appendChild(el('p', {}, [el('strong', { text: 'Answer review' })]));
     for (i = 0; i < test.presented.length; i++) {
       item = test.presented[i];
+      if (!item) continue;
       q = item.question;
       card = el('div');
       card.appendChild(el('p', {}, [el('strong', { text: q && q.prompt ? q.prompt : '' })]));
@@ -931,7 +1007,9 @@
     actions.appendChild(retake);
     actions.appendChild(home);
     shell.appendChild(actions);
+    host.innerHTML = '';
     host.appendChild(shell);
+    ensureHostNotEmpty(host);
   }
 
   /* ------------------------------------------------------------------ */
@@ -943,6 +1021,36 @@
     wrap.appendChild(el('p', {}, [el('strong', { text: title })]));
     if (blurb) wrap.appendChild(el('p', { text: blurb }));
     return wrap;
+  }
+
+  function leaveIqHost() {
+    var sh = getNs('HRL_SHELL');
+    if (sh && typeof sh.showView === 'function') sh.showView('path');
+  }
+
+  function renderEscapableEmpty(host) {
+    var wrap;
+    var btn;
+    if (!host) return;
+    host.innerHTML = '';
+    wrap = emptyState(
+      'Nothing to show here.',
+      'This Baseball IQ test could not display the next screen. You can go back to My Path and try again.'
+    );
+    btn = el('button', {
+      type: 'button',
+      class: 'btn btn-primary',
+      text: 'Back to My Path'
+    });
+    btn.addEventListener('click', leaveIqHost);
+    wrap.appendChild(btn);
+    host.appendChild(wrap);
+  }
+
+  function ensureHostNotEmpty(host) {
+    if (!host) return;
+    if (host.firstChild) return;
+    renderEscapableEmpty(host);
   }
 
   function renderIntro() {
@@ -1069,11 +1177,15 @@
       usedTopics: [],
       presented: [],
       current: null,
+      index: 0,
       locked: false,
       orderWorking: [],
       timerOn: timerEnabled(),
       remaining: TIMER_SECONDS,
-      recorded: false
+      recorded: false,
+      finished: false,
+      renderToken: 0,
+      resultShown: false
     };
     first = pickNext();
     if (!first) {
@@ -1083,6 +1195,7 @@
         'The Baseball IQ test needs questions loaded before it can start.'
       ));
       test = null;
+      ensureHostNotEmpty(host);
       return;
     }
     test.current = first;
@@ -1105,6 +1218,8 @@
     computeBbiq: computeBbiq,
     bandFor: bandFor,
     topicBreakdown: topicBreakdown,
+    advanceIndex: advanceIndex,
+    isStale: isStale,
     renderIntro: renderIntro,
     start: start
   };

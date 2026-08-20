@@ -246,6 +246,47 @@
     return nowMs + days * MS_PER_DAY;
   }
 
+  function isStale(state, token) {
+    if (!state) return true;
+    return token !== state.renderToken;
+  }
+
+  function advanceIndex(state, total, onComplete) {
+    var n;
+    var next;
+    if (!state) {
+      return { index: 0, finished: true };
+    }
+    if (state.finished) {
+      return { index: state.index, finished: true };
+    }
+    n = Number(total);
+    if (isNaN(n) || n < 0) n = 0;
+    next = Number(state.index);
+    if (isNaN(next)) next = 0;
+    next = next + 1;
+    if (next >= n) {
+      state.finished = true;
+      if (n > 0) {
+        if (typeof state.index !== 'number' || isNaN(state.index) || state.index < 0 || state.index >= n) {
+          state.index = n - 1;
+        }
+      } else {
+        state.index = 0;
+      }
+      if (typeof onComplete === 'function') onComplete();
+      return { index: state.index, finished: true };
+    }
+    state.index = next;
+    return { index: state.index, finished: false };
+  }
+
+  function nextRenderToken(state) {
+    if (!state) return 0;
+    state.renderToken = (typeof state.renderToken === 'number' ? state.renderToken : 0) + 1;
+    return state.renderToken;
+  }
+
   /* ------------------------------------------------------------------ */
   /* Lookups                                                             */
   /* ------------------------------------------------------------------ */
@@ -363,6 +404,55 @@
     return wrap;
   }
 
+  function leaveQuizHost() {
+    var sh;
+    var chapterId;
+    sh = getNs('HRL_SHELL');
+    if (session && session.kind === 'review') {
+      renderReviewDeck();
+      return;
+    }
+    chapterId = session && session.chapterId ? session.chapterId : null;
+    if (chapterId && sh && typeof sh.openChapter === 'function') {
+      sh.openChapter(chapterId);
+      return;
+    }
+    if (sh && typeof sh.showView === 'function') {
+      sh.showView('path');
+    }
+  }
+
+  function renderEscapableEmpty(host) {
+    var wrap;
+    var btn;
+    var chapterId;
+    var label;
+    if (!host) return;
+    chapterId = session && session.chapterId ? session.chapterId : null;
+    if (session && session.kind === 'review') label = 'Back to review';
+    else if (chapterId) label = 'Back to chapter';
+    else label = 'Back to My Path';
+    host.innerHTML = '';
+    wrap = emptyState(
+      'Nothing to show here.',
+      'This quiz could not display the next screen. You can go back and try again.'
+    );
+    btn = el('button', {
+      type: 'button',
+      class: 'btn btn-primary',
+      text: label
+    });
+    btn.addEventListener('click', leaveQuizHost);
+    wrap.appendChild(btn);
+    host.appendChild(wrap);
+  }
+
+  function ensureHostNotEmpty(host) {
+    if (!host) return;
+    if (host.firstChild) return;
+    renderEscapableEmpty(host);
+  }
+
   function hostEl(id) {
     if (!hasDocument()) return null;
     return document.getElementById(id);
@@ -429,6 +519,9 @@
       locked: false,
       orderWorking: [],
       recorded: false,
+      finished: false,
+      renderToken: 0,
+      resultShown: false,
       reviewStats: { reviewed: 0, promoted: 0, retired: 0 },
       quizRecord: null
     };
@@ -487,13 +580,14 @@
     renderCurrent();
   }
 
-  function bindHotspots(container) {
+  function bindHotspots(container, token) {
     var nodes;
     var i;
     function onActivate(ev) {
       var id;
       var key;
-      if (!session || session.locked) return;
+      if (!session || session.finished || isStale(session, token)) return;
+      if (session.locked) return;
       if (ev.type === 'keydown') {
         key = ev.key || ev.keyCode;
         if (key !== 'Enter' && key !== ' ' && key !== 'Spacebar' && key !== 13 && key !== 32) return;
@@ -527,7 +621,7 @@
     }
   }
 
-  function renderOrderList(host, question) {
+  function renderOrderList(host, question, token) {
     var i;
     var row;
     var text;
@@ -557,8 +651,14 @@
       if (session.locked || i === 0) up.disabled = true;
       if (session.locked || i === session.orderWorking.length - 1) down.disabled = true;
       (function (idx) {
-        up.addEventListener('click', function () { moveOrder(idx, -1); });
-        down.addEventListener('click', function () { moveOrder(idx, 1); });
+        up.addEventListener('click', function () {
+          if (!session || session.finished || isStale(session, token)) return;
+          moveOrder(idx, -1);
+        });
+        down.addEventListener('click', function () {
+          if (!session || session.finished || isStale(session, token)) return;
+          moveOrder(idx, 1);
+        });
       }(i));
       btns.appendChild(up);
       btns.appendChild(down);
@@ -579,12 +679,16 @@
         id: 'quiz-check-order'
       }));
       host.querySelector('#quiz-check-order').addEventListener('click', function () {
+        var checkBtn;
+        if (!session || session.finished || isStale(session, token)) return;
+        checkBtn = host.querySelector('#quiz-check-order');
+        if (checkBtn) checkBtn.disabled = true;
         submitAnswer(session.orderWorking.slice());
       });
     }
   }
 
-  function renderChoices(host, question, outcome) {
+  function renderChoices(host, question, outcome, token) {
     var list;
     var i;
     var btn;
@@ -606,15 +710,28 @@
         role: 'listitem'
       });
       if (session.locked) btn.disabled = true;
-      (function (idx) {
-        btn.addEventListener('click', function () {
+      (function (idx, choiceBtn) {
+        choiceBtn.addEventListener('click', function () {
+          if (!session || session.finished || isStale(session, token)) return;
           if (session.locked) return;
+          choiceBtn.disabled = true;
           submitAnswer(idx);
         });
-      }(i));
+      }(i, btn));
       list.appendChild(btn);
     }
     host.appendChild(list);
+  }
+
+  function showFinish(host) {
+    if (!host) host = session ? hostEl(session.rootId) : null;
+    if (session && session.resultShown) {
+      ensureHostNotEmpty(host);
+      return;
+    }
+    if (session && session.kind === 'review') renderReviewSummary(host);
+    else renderQuizResults(host);
+    ensureHostNotEmpty(host);
   }
 
   function renderCurrent() {
@@ -627,16 +744,24 @@
     var nextBtn;
     var live;
     var diagramWrap;
+    var token;
+    var total;
     if (!session) return;
     host = hostEl(session.rootId);
     if (!host) return;
-    host.innerHTML = '';
-    question = session.questions[session.index];
-    if (!question) {
-      if (session.kind === 'review') renderReviewSummary(host);
-      else renderQuizResults(host);
+    total = session.questions ? session.questions.length : 0;
+    if (session.finished) {
+      if (!host.firstChild) showFinish(host);
       return;
     }
+    question = session.questions ? session.questions[session.index] : null;
+    if (!question) {
+      session.finished = true;
+      showFinish(host);
+      return;
+    }
+    token = nextRenderToken(session);
+    host.innerHTML = '';
     outcome = session.outcomes[session.index] || null;
     shell = el('div', { class: 'quiz-shell' });
     live = el('div', {
@@ -654,16 +779,16 @@
       diagramWrap = el('div', { class: 'quiz-hotspot', html: renderDiagramHtml(question) });
       shell.appendChild(diagramWrap);
       if (session.locked) markHotspots(diagramWrap, outcome && outcome.response, question);
-      else bindHotspots(diagramWrap);
+      else bindHotspots(diagramWrap, token);
     } else if (question.type === 'order') {
       if (!session.orderWorking || !session.orderWorking.length) {
         session.orderWorking = (question.presentedItems && question.presentedItems.length)
           ? question.presentedItems.slice()
           : (question.items || []).slice();
       }
-      renderOrderList(shell, question);
+      renderOrderList(shell, question, token);
     } else {
-      renderChoices(shell, question, outcome);
+      renderChoices(shell, question, outcome, token);
     }
 
     if (session.locked && question.explain) {
@@ -676,9 +801,13 @@
       nextBtn = el('button', {
         type: 'button',
         class: 'btn btn-primary',
-        text: session.index >= session.questions.length - 1 ? 'See results' : 'Next'
+        text: session.index >= total - 1 ? 'See results' : 'Next'
       });
-      nextBtn.addEventListener('click', goNext);
+      nextBtn.addEventListener('click', function () {
+        if (!session || session.finished || isStale(session, token)) return;
+        nextBtn.disabled = true;
+        goNext();
+      });
       shell.appendChild(nextBtn);
     }
 
@@ -686,6 +815,7 @@
     if (session.locked && nextBtn && typeof nextBtn.focus === 'function') {
       try { nextBtn.focus(); } catch (e) {}
     }
+    ensureHostNotEmpty(host);
   }
 
   function submitAnswer(response) {
@@ -693,9 +823,13 @@
     var correct;
     var P;
     var rec;
-    if (!session || session.locked) return;
+    if (!session || session.finished || session.locked) return;
     question = session.questions[session.index];
-    if (!question) return;
+    if (!question) {
+      session.finished = true;
+      showFinish(hostEl(session.rootId));
+      return;
+    }
     correct = isCorrect(question, response);
     session.locked = true;
     session.outcomes[session.index] = {
@@ -723,16 +857,15 @@
   }
 
   function goNext() {
-    if (!session) return;
-    session.index += 1;
+    var step;
+    var total;
+    if (!session || session.finished) return;
+    total = session.questions ? session.questions.length : 0;
     session.locked = false;
     session.orderWorking = [];
-    if (session.index >= session.questions.length) {
-      if (session.kind === 'review') {
-        renderReviewSummary(hostEl(session.rootId));
-      } else {
-        renderQuizResults(hostEl(session.rootId));
-      }
+    step = advanceIndex(session, total);
+    if (step.finished) {
+      showFinish(hostEl(session.rootId));
       return;
     }
     renderCurrent();
@@ -768,6 +901,7 @@
     wrap = el('div', { class: 'answer-review' });
     for (i = 0; i < session.outcomes.length; i++) {
       item = session.outcomes[i];
+      if (!item || !item.question) continue;
       q = item.question;
       card = el('div');
       card.appendChild(el('p', {}, [el('strong', { text: q.prompt || '' })]));
@@ -810,8 +944,16 @@
     var nextId;
     var sh;
     var msg;
-    if (!host) return;
-    host.innerHTML = '';
+    if (!session) {
+      ensureHostNotEmpty(host);
+      return;
+    }
+    if (session.resultShown) {
+      ensureHostNotEmpty(host);
+      return;
+    }
+    session.finished = true;
+    nextRenderToken(session);
     flags = [];
     for (i = 0; i < session.outcomes.length; i++) flags.push(session.outcomes[i].correct);
     scored = scoreQuiz(flags);
@@ -877,13 +1019,18 @@
       actions.appendChild(next);
     }
     result.appendChild(actions);
-    host.appendChild(result);
+    session.resultShown = true;
+    if (host) {
+      host.innerHTML = '';
+      host.appendChild(result);
+    }
 
     msg = scored.passed
       ? 'Quiz complete. You scored ' + scored.pct + ' percent and passed.'
       : 'Quiz complete. You scored ' + scored.pct + ' percent.';
     announce(msg);
     if (scored.passed) toast('Chapter quiz passed at ' + scored.pct + '%.', 'success');
+    ensureHostNotEmpty(host);
   }
 
   function renderReviewSummary(host) {
@@ -893,8 +1040,16 @@
     var again;
     var home;
     var sh;
-    if (!host) return;
-    host.innerHTML = '';
+    if (!session) {
+      ensureHostNotEmpty(host);
+      return;
+    }
+    if (session.resultShown) {
+      ensureHostNotEmpty(host);
+      return;
+    }
+    session.finished = true;
+    nextRenderToken(session);
     stats = session.reviewStats;
     shell = el('div', { class: 'quiz-shell' });
     shell.appendChild(el('div', { class: 'quiz-result' }, [
@@ -917,7 +1072,12 @@
     actions.appendChild(again);
     actions.appendChild(home);
     shell.appendChild(actions);
-    host.appendChild(shell);
+    if (host) {
+      host.innerHTML = '';
+      host.appendChild(shell);
+    }
+    session.resultShown = true;
+    ensureHostNotEmpty(host);
   }
 
   /* ------------------------------------------------------------------ */
@@ -947,6 +1107,7 @@
         'A chapter quiz needs at least three questions. You can still read the chapter and come back later.'
       ));
       session = null;
+      ensureHostNotEmpty(host);
       return;
     }
     session = newSession('quiz', 'quiz-root', questions, {
@@ -1056,6 +1217,8 @@
     scoreQuiz: scoreQuiz,
     nextBox: nextBox,
     dueDateFor: dueDateFor,
+    advanceIndex: advanceIndex,
+    isStale: isStale,
     start: start,
     renderReviewDeck: renderReviewDeck,
     startReview: startReview

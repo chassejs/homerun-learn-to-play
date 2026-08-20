@@ -13,3 +13,28 @@ back to Grok as a corrective brief instead.
 | 5 | 10 | `src/curriculum-data.js` | All six tiers pointed `heroImage` at `brand/hero-tier-N.jpg`. Those raster files do not exist and cannot be generated in this build, so every chapter load fired a 404 — six console errors, against an acceptance criterion of zero. The `onerror` fallback worked, but a handled 404 is still a logged error. | Set all six `heroImage` values to `null` with an inline comment naming the path to restore if raster art is ever added. `mountHero` in `learn.js` already renders the SVG hero directly when `heroImage` is empty, so nothing else changed. | `node --check`, tier dump, browser console clean of hero 404s |
 | 6 | scaffold | `tests/versionCompat.test.js` | **My scaffolding error, not Grok's.** The initial scaffold copied the shared infrastructure from `homerun-practice-app` but iterated only over repo-root files, so the one file inside `tests/` was silently skipped. The chunk-9 brief then told the implementer to "update the app-name strings" in a file that did not exist. | Copied the file across with the same `HRP_` → `HRL_` and app-name rewrite as the other shared files. Its last two tests exercised `practice.js`'s `normalizePracticePlan`, which has no counterpart here — replaced that section with two equivalent tests against `progress.js` (`exportPayload` carries the fields the compatibility layer reads; `mergeState` keeps the higher best score and sticky completion without mutating its inputs). | `node tests/versionCompat.test.js` — 22 passed, 0 failed |
 | 7 | scaffold | `changelog.js` | The copied file kept the Practice Planner's 1.0 release notes verbatim — "split out of Homerun Lineup v2.2", "368 drills", "Sequential drills or multi-station mode". The version and date happened to be right, so the version-consistency test passed and the wrong content would have shipped into the in-app What's-New modal and `changelog.html`. | Replaced the entry's title and all eight highlights with this app's actual 1.0 feature set. Structure and version metadata untouched. | `node --check`, `tests/versionCompat.test.js` still 22/22 |
+
+## Post-deploy finding (chunk 14)
+
+Found by driving the **deployed** site rather than the local build. Two related
+bugs in the question-runner advancement path, sent back to the implementer:
+
+1. **A detached "Next" button still advances the quiz.** After a click the runner
+   re-renders and the old button leaves the document (`document.body.contains(btn)`
+   is `false`), but its handler closes over runner state, so invoking it again on
+   the stale node still increments the index. Measured: one detached button
+   advanced Q2→Q3 and then Q3→Q4.
+2. **Overshooting the last question renders nothing.** Past the end the runner
+   clears `#quiz-root` and renders no result — measured `innerHTML.length === 0`,
+   zero buttons, zero dots. The learner is stranded on a blank page inside the
+   quiz view, and the attempt is never recorded (`attempts: 0`) even though
+   answers were given and misses reached the review deck.
+
+Reachable by an ordinary fast double-click on "Next": the first click re-renders,
+the second lands on the freshly-inserted button at the same position; on the last
+question that second advance overshoots.
+
+Fix requested: a monotonic render token so stale handlers are inert, a `finished`
+flag so the result screen renders exactly once and `recordQuiz`/`recordIq` fire
+exactly once, an explicit bounds branch that renders the result rather than
+clearing the root, and a never-empty safety net. Same guards applied to `iq.js`.
