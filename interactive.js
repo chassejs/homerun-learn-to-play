@@ -402,14 +402,113 @@ window.HRL_INTERACTIVE = (function () {
     return bar;
   }
 
-  function makeCtx() {
+  /* Section heading vs widget-head: trim, collapse whitespace, case-insensitive. */
+  function nodePlainText(node) {
+    var t;
+    if (!node) return '';
+    try {
+      t = node.textContent != null ? node.textContent : node.innerText;
+    } catch (err) {
+      t = '';
+    }
+    return safeText(t);
+  }
+
+  function headingKey(s) {
+    return trimStr(s).replace(/\s+/g, ' ').toLowerCase();
+  }
+
+  function headingsEqual(a, b) {
+    var ka = headingKey(a);
+    var kb = headingKey(b);
+    if (!ka || !kb) return false;
+    return ka === kb;
+  }
+
+  function closestByClass(node, className) {
+    var cur;
+    if (!node || !className) return null;
+    cur = node;
+    if (typeof cur.closest === 'function') {
+      try {
+        return cur.closest('.' + className);
+      } catch (err) {
+        return null;
+      }
+    }
+    while (cur && cur.nodeType === 1) {
+      if (hasClass(cur, className)) return cur;
+      cur = cur.parentNode;
+    }
+    return null;
+  }
+
+  function enclosingSectionHeading(container) {
+    var section, node;
+    if (!container) return '';
+    section = closestByClass(container, 'section');
+    if (!section || typeof section.querySelector !== 'function') return '';
+    node = section.querySelector('.section-heading');
+    if (!node) node = section.querySelector('h3');
+    if (!node) return '';
+    return nodePlainText(node);
+  }
+
+  function insertWidgetHeadNode(host, head) {
+    var body;
+    if (!host || !head) return;
+    body = typeof host.querySelector === 'function' ? host.querySelector('.widget-body') : null;
+    if (body && body.parentNode === host) {
+      host.insertBefore(head, body);
+      return;
+    }
+    if (host.firstChild) host.insertBefore(head, host.firstChild);
+    else host.appendChild(head);
+  }
+
+  function applyWidgetHead(container, title) {
+    var sectionTitle, host, heads, i, head;
+    try {
+      if (!container) return null;
+      sectionTitle = enclosingSectionHeading(container);
+      host = closestByClass(container, 'widget') || container;
+      heads = [];
+      if (host && typeof host.querySelectorAll === 'function') {
+        heads = host.querySelectorAll('.widget-head') || [];
+      }
+      if (sectionTitle) {
+        for (i = heads.length - 1; i >= 0; i--) {
+          if (headingsEqual(nodePlainText(heads[i]), sectionTitle)) {
+            if (heads[i] && heads[i].parentNode) heads[i].parentNode.removeChild(heads[i]);
+          }
+        }
+      }
+      title = trimStr(title);
+      if (!title) return null;
+      if (sectionTitle && headingsEqual(title, sectionTitle)) return null;
+      if (host && typeof host.querySelector === 'function') {
+        head = host.querySelector('.widget-head');
+        if (head) return head;
+      }
+      head = el('div', { class: 'widget-head', text: title });
+      insertWidgetHeadNode(host, head);
+      return head;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function makeCtx(container) {
     return {
       el: el,
       esc: esc,
       shuffle: shuffle,
       status: ctxStatus,
       actions: ctxActions,
-      reducedMotion: reducedMotionNow
+      reducedMotion: reducedMotionNow,
+      widgetHead: function (title) {
+        return applyWidgetHead(container, title);
+      }
     };
   }
 
@@ -580,8 +679,11 @@ window.HRL_INTERACTIVE = (function () {
   }
 
   function mount(name, container, opts, onComplete) {
-    var ctx;
+    var ctx, title;
     if (!hasDoc() || !container) return false;
+    opts = opts && typeof opts === 'object' ? opts : {};
+    title = trimStr(opts.title || opts.heading);
+    applyWidgetHead(container, title);
     container.innerHTML = '';
     if (!has(name)) {
       setEmpty(
@@ -591,9 +693,10 @@ window.HRL_INTERACTIVE = (function () {
       );
       return false;
     }
-    ctx = makeCtx();
+    ctx = makeCtx(container);
     try {
-      widgets[name].mount(container, opts || {}, onComplete, ctx);
+      widgets[name].mount(container, opts, onComplete, ctx);
+      applyWidgetHead(container, title);
       return true;
     } catch (e) {
       container.innerHTML = '';
