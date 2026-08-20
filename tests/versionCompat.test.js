@@ -8,6 +8,8 @@
 
 'use strict';
 
+const path = require('path');
+
 // ---------------------------------------------------------------------------
 // Minimal browser-environment shim so versionCompat.js loads under Node.
 // ---------------------------------------------------------------------------
@@ -23,21 +25,10 @@ global.HRL_VERSION = {
 
 // Load versionCompat.js by reading and eval-ing it (no ES module system needed).
 const fs = require('fs');
-const path = require('path');
 const code = fs.readFileSync(path.join(__dirname, '..', 'versionCompat.js'), 'utf8');
 eval(code); // populates global.HRL_VERSION_COMPAT
 
 const compat = global.HRL_VERSION_COMPAT;
-
-// ---------------------------------------------------------------------------
-// Real-function import for the progress backup payload: require the actual
-// progress.js source rather than a hand-maintained copy, so a regression in
-// the real merge logic is caught here. progress.js guards its browser-only
-// code with `typeof document !== 'undefined'` and wraps every localStorage
-// access in try/catch, so a plain Node require() loads it without executing
-// any DOM code — only the pure functions are used below.
-// ---------------------------------------------------------------------------
-const progressModule = require(path.join(__dirname, '..', 'progress.js'));
 
 // ---------------------------------------------------------------------------
 // Minimal test harness
@@ -116,7 +107,7 @@ test('message is null', function () {
 console.log('\nisImportCompatible — legacy file treated as 1.0');
 
 test('1.0 is compatible when app is at 1.0 (covers the legacy-implicit case)', function () {
-  // In importSavedPlansFromFile, missing dataVersion defaults to "1.0".
+  // In importPayload, missing dataVersion defaults to "1.0".
   // Here we just confirm "1.0" is always compatible with a 1.0 app.
   const result = compat.isImportCompatible('1.0');
   assertEqual(result.status, 'compatible');
@@ -169,7 +160,7 @@ test('status is "migratable" when migration path exists', function () {
 test('applyMigrations transforms the data payload', function () {
   // A migration that adds a sentinel field to the data object
   const step = { from: '0.9', to: '1.0', migrate: function(d) { return Object.assign({}, d, { _migrated: true }); } };
-  const original = { 'My Plan': { mode: 'sequential', items: [] } };
+  const original = { chapters: {}, badges: [] };
   const result = compat.applyMigrations(original, [step]);
   assert(result._migrated === true, 'Migration should have added _migrated:true');
   // Original should not be mutated (shallow copy)
@@ -297,59 +288,10 @@ test('changelog.js entries are well-formed and ordered newest-first', function (
 });
 
 // ---------------------------------------------------------------------------
-// Progress backup envelope and merge semantics.
-// The exported payload must carry the fields versionCompat.js inspects, and
-// mergeState must be pure and must never lose a completed chapter or a higher
-// best score. tests/progress.test.js covers the full merge matrix; these two
-// guard the compatibility surface specifically.
-// ---------------------------------------------------------------------------
-console.log('\nprogress.js — backup envelope and merge compatibility');
-
-test('exportPayload carries the fields the compatibility layer reads', function () {
-  const payload = progressModule.exportPayload();
-  assertEqual(typeof payload.app, 'string', 'payload.app');
-  assertEqual(payload.app, 'homerun-learn-to-play', 'payload.app value');
-  assert(payload.dataVersion, 'payload.dataVersion is present');
-  assert(payload.appVersion, 'payload.appVersion is present');
-  assert(payload.exportedAt, 'payload.exportedAt is present');
-  assert(payload.data && typeof payload.data === 'object', 'payload.data is an object');
-});
-
-test('mergeState keeps the higher best score and a completed chapter, without mutating its inputs', function () {
-  const current = {
-    chapters: { ch01: { visited: true, completed: true, bestScore: 88, attempts: 2 } },
-    badges: ['chapter-ch01'], review: [], iq: { attempts: [], best: null },
-    streak: { current: 1, longest: 4, lastActiveDay: '2026-01-01' },
-    placement: { done: true, recommendedTier: 2, takenAt: '2026-01-01' },
-    settings: {}
-  };
-  const incoming = {
-    chapters: { ch01: { visited: true, completed: false, bestScore: 95, attempts: 1 } },
-    badges: [], review: [], iq: { attempts: [], best: null },
-    streak: { current: 1, longest: 2, lastActiveDay: '2026-01-01' },
-    placement: { done: true, recommendedTier: 2, takenAt: '2026-01-01' },
-    settings: {}
-  };
-  const snapshotCurrent = JSON.stringify(current);
-  const snapshotIncoming = JSON.stringify(incoming);
-
-  const merged = progressModule.mergeState(current, incoming);
-
-  assertEqual(merged.chapters.ch01.bestScore, 95, 'bestScore takes the higher value');
-  assertEqual(merged.chapters.ch01.completed, true, 'completed is sticky-true');
-  assertEqual(merged.chapters.ch01.attempts, 3, 'attempts are summed');
-  assertEqual(merged.streak.longest, 4, 'streak.longest takes the max');
-  assertEqual(JSON.stringify(current), snapshotCurrent, 'current argument is not mutated');
-  assertEqual(JSON.stringify(incoming), snapshotIncoming, 'incoming argument is not mutated');
-});
-
-// ---------------------------------------------------------------------------
 // Summary
 // ---------------------------------------------------------------------------
 console.log('\n----------------------------------------');
 console.log('Results: ' + passed + ' passed, ' + failed + ' failed');
-// When run under tests/run-all.js, report into the shared tally instead of
-// exiting — an exit here would truncate the rest of the suite.
 if (global.__HRL_TEST_RUNNER && typeof global.__HRL_TEST_RUNNER.record === 'function') {
   global.__HRL_TEST_RUNNER.record(path.basename(__filename), passed, failed);
 } else if (failed > 0) {

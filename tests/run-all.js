@@ -8,9 +8,10 @@
 
 'use strict';
 
+const fs = require('fs');
 const path = require('path');
 
-const FILES = [
+const PREFERRED = [
   'syntax.test.js',
   'curriculum.test.js',
   'questions.test.js',
@@ -20,6 +21,22 @@ const FILES = [
   'progress.test.js',
   'versionCompat.test.js'
 ];
+
+const found = fs.readdirSync(__dirname).filter(function (name) {
+  return name.length > 8 && name.slice(-8) === '.test.js';
+});
+const FILES = [];
+const seen = {};
+for (let i = 0; i < PREFERRED.length; i++) {
+  if (found.indexOf(PREFERRED[i]) !== -1) {
+    FILES.push(PREFERRED[i]);
+    seen[PREFERRED[i]] = true;
+  }
+}
+found.sort();
+for (let i = 0; i < found.length; i++) {
+  if (!seen[found[i]]) FILES.push(found[i]);
+}
 
 const stats = {
   files: [],

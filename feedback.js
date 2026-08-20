@@ -13,11 +13,11 @@ window.HRL_FEEDBACK = (function () {
 
   var CATEGORIES = [
     { value: '', label: 'Choose one…' },
-    { value: 'bug', label: 'Bug — something is broken' },
-    { value: 'drills', label: 'Drill library' },
-    { value: 'planbuilder', label: 'Plan builder or stations' },
-    { value: 'backup', label: 'Save/Load or Export/Import' },
-    { value: 'printing', label: 'Printing' },
+    { value: 'lesson', label: 'Lesson content — wrong, unclear, or missing' },
+    { value: 'quiz', label: 'A quiz question is wrong or unclear' },
+    { value: 'iq', label: 'Baseball IQ test' },
+    { value: 'diagrams', label: 'Diagrams and interactive exercises' },
+    { value: 'progress', label: 'Progress, export, or import' },
     { value: 'design', label: 'Design & layout' },
     { value: 'feature', label: 'Feature request' },
     { value: 'question', label: 'Question / need help' },

@@ -13,16 +13,15 @@ window.HRL_CHANGELOG = (function () {
       version: '1.0',
       date: '2026-08-19',
       type: 'major',
-      title: 'First release',
+      title: 'First release — Homerun Learn to Play',
       highlights: [
-        'Twenty-four chapters across six tiers, from never-watched-a-game to scouting and analytics.',
-        'A short placement quiz recommends where to start — and every chapter stays unlocked either way.',
-        'Diagrams and sixteen hands-on exercises built into the lessons, all keyboard-operable.',
-        'A quiz after every chapter, with a 75% pass mark and best-score tracking.',
-        'Missed questions return automatically on a spaced-repetition schedule until they stick.',
-        'An adaptive Baseball IQ test scored on a 40–160 scale, with a per-topic breakdown.',
-        'A 205-term glossary, searchable and linked from the lessons.',
-        'Everything works offline and stays in this browser; export and import your progress as a JSON file.'
+        'A short placement quiz recommends a starting tier. Skip it to begin at Rookie; every chapter stays unlocked.',
+        'Twenty-four chapters across six tiers — Rookie, Sandlot, Diamond, Select, Elite, and Pro Mind.',
+        'A 300+ question bank behind chapter quizzes. Pass at 75%; your best score is kept, and you can retake.',
+        'Missed questions feed a spaced-repetition review deck on a 1 / 3 / 7 / 16 / 35 day schedule.',
+        'A 20-question adaptive Baseball IQ test scored on a 40–160 BBIQ scale, with bands from Rookie to Pro Mind.',
+        'A programmatic SVG diagram library and sixteen interactive widgets — mouse, touch, and keyboard.',
+        'Works offline after the first load. Progress lives in this browser only, with export/import backup.'
       ]
     }
   ];
