@@ -1,0 +1,14 @@
+{
+  "name": "homerun-learn-to-play",
+  "version": "1.0.0",
+  "description": "Homerun Learn to Play — progressive interactive baseball curriculum for Homerun Baseball Ottawa.",
+  "private": true,
+  "scripts": {
+    "build": "echo 'Static build complete — no bundler needed. Files served from root.' && exit 0",
+    "start": "npx serve . --listen 3000",
+    "test": "node tests/run-all.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

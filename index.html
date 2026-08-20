@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Homerun Learn to Play</title>
+<meta name="description" content="Homerun Baseball Ottawa — a progressive baseball curriculum from first pitch to pro-level IQ. Learn chapter by chapter, quiz as you go, and measure your Baseball IQ.">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#062448">
+<link rel="icon" type="image/png" sizes="32x32" href="brand/icon-32.png">
+<link rel="apple-touch-icon" href="brand/icon-180.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<a href="#app-main" class="skip-link">Skip to content</a>
+
+<header class="app-bar no-print">
+  <img src="brand/crest.png" alt="Homerun Baseball Ottawa" class="app-logo" width="64" height="64">
+  <div class="app-bar-title">
+    <h1>Homerun Learn to Play</h1>
+    <span class="app-bar-sub">Baseball, chapter by chapter</span>
+  </div>
+  <nav class="app-nav" aria-label="Main navigation">
+    <button type="button" class="nav-btn active" data-view="home">Home</button>
+    <button type="button" class="nav-btn" data-view="path">My Path</button>
+    <button type="button" class="nav-btn" data-view="iq">Baseball IQ</button>
+    <button type="button" class="nav-btn" data-view="review">Review</button>
+    <button type="button" class="nav-btn" data-view="glossary">Glossary</button>
+    <button type="button" class="nav-btn nav-btn-readme" data-view="help">Help &amp; Guide</button>
+  </nav>
+</header>
+
+<main id="app-main">
+
+  <!-- HOME -->
+  <section class="view active" id="view-home">
+    <div class="hero">
+      <div class="hero-inner">
+        <img src="brand/crest.png" alt="Homerun Baseball Ottawa" class="hero-crest" width="96" height="96">
+        <h2 class="hero-title">Learn baseball, one chapter at a time</h2>
+        <p class="hero-motto">Talent is what you have, effort is what you give.</p>
+        <div class="hero-actions">
+          <button type="button" class="btn btn-accent" id="home-placement-btn">Find my starting point</button>
+          <button type="button" class="btn btn-ghost" id="home-browse-btn" data-view="path">Browse all chapters</button>
+        </div>
+      </div>
+    </div>
+    <div class="home-body">
+      <div id="home-continue"></div>
+      <div id="home-tier-rail"></div>
+      <div class="quick-links">
+        <button type="button" class="quick-link-card" data-view="iq">
+          <span class="quick-link-title">Baseball IQ</span>
+          <span class="quick-link-blurb">Take the adaptive test and see your score on the 40–160 BBIQ scale.</span>
+        </button>
+        <button type="button" class="quick-link-card" data-view="review">
+          <span class="quick-link-title">Review</span>
+          <span class="quick-link-blurb">Missed quiz questions come back on a schedule until they stick.</span>
+        </button>
+        <button type="button" class="quick-link-card" data-view="glossary">
+          <span class="quick-link-title">Glossary</span>
+          <span class="quick-link-blurb">Every baseball term used in the chapters, A to Z.</span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- MY PATH -->
+  <section class="view" id="view-path">
+    <h2>My Path</h2>
+    <p class="hint">Your recommended starting point and every chapter, grouped by tier.</p>
+    <div id="path-root"></div>
+  </section>
+
+  <!-- CHAPTER READER (entered from Path; no nav button) -->
+  <section class="view" id="view-chapter">
+    <h2>Chapter</h2>
+    <p class="hint">Read the lesson, try the diagrams, then take the chapter quiz.</p>
+    <div id="chapter-root"></div>
+  </section>
+
+  <!-- CHAPTER QUIZ (entered from a chapter; no nav button) -->
+  <section class="view" id="view-quiz">
+    <h2>Chapter quiz</h2>
+    <p class="hint">Answer each question, then read the explanation.</p>
+    <div id="quiz-root"></div>
+  </section>
+
+  <!-- BASEBALL IQ -->
+  <section class="view" id="view-iq">
+    <h2>Baseball IQ</h2>
+    <p class="hint">A 20-question adaptive test scored on the 40–160 BBIQ scale.</p>
+    <div id="iq-root"></div>
+  </section>
+
+  <!-- REVIEW DECK -->
+  <section class="view" id="view-review">
+    <h2>Review</h2>
+    <p class="hint">Missed questions return here on a spaced schedule until they stick.</p>
+    <div id="review-root"></div>
+  </section>
+
+  <!-- GLOSSARY -->
+  <section class="view" id="view-glossary">
+    <h2>Glossary</h2>
+    <p class="hint">Every baseball term used in the chapters, A to Z.</p>
+    <div id="glossary-root"></div>
+  </section>
+
+  <!-- HELP & GUIDE -->
+  <section class="view" id="view-help">
+    <h2>Help &amp; Guide</h2>
+    <div class="readme-content">
+
+      <section class="readme-section">
+        <h3>How this app works</h3>
+        <p>Homerun Learn to Play is a baseball curriculum you can work through at your own pace. Everything runs in this browser — no account, no install beyond what you choose to pin to your home screen.</p>
+        <ol>
+          <li><strong>Find your starting point.</strong> A short placement quiz (a few questions about you, then a handful of baseball questions) recommends a tier. You can skip it and start from the very beginning, and you can re-run it later.</li>
+          <li><strong>Read the chapters.</strong> Twenty-four chapters across six tiers, from Rookie to Pro Mind. Each chapter has short lessons, diagrams, and a few things to try with your hands or keyboard.</li>
+          <li><strong>Take the chapter quiz.</strong> Pass at 75%. You can retake as often as you like; your best score is kept. Every miss is saved for review.</li>
+          <li><strong>Use the review deck.</strong> Missed questions come back on a spaced schedule — sooner if you miss again, later as you get them right.</li>
+          <li><strong>Measure Baseball IQ.</strong> A separate 20-question adaptive test scores you on a 40–160 BBIQ scale and shows which topics are strong and which to study next.</li>
+        </ol>
+        <p>Every chapter stays unlocked. Placement only highlights where to start; it never locks content away.</p>
+      </section>
+
+      <section class="readme-section">
+        <h3>How your progress is stored</h3>
+        <p>Your path, quiz scores, review deck, and Baseball IQ history live in <em>this browser on this device</em>. There is no account and no cloud copy. Closing the tab is fine — progress is saved as you go. Clearing this site’s data, switching browsers, or using another phone or computer starts you over unless you have a backup.</p>
+      </section>
+
+      <section class="readme-section">
+        <h3>Export and import</h3>
+        <p>Because progress lives only here, a backup is how you keep it or move it.</p>
+        <ul>
+          <li><strong>Export</strong> downloads a <code>.json</code> file of your progress. Keep it somewhere safe, or copy it to another device.</li>
+          <li><strong>Import</strong> reads a file you exported earlier and <em>merges</em> it with what is already here: higher quiz scores win, completed chapters stay completed, and review items keep the later due date.</li>
+        </ul>
+        <p>Export before you clear browser data, switch devices, or update the app if you want a belt-and-suspenders copy.</p>
+      </section>
+
+      <section class="readme-section">
+        <h3>Feedback, version, and history</h3>
+        <p>Found a problem, a confusing quiz question, or an idea for a later chapter? Send a note — the app writes the email and opens it in your mail app.</p>
+        <p><button type="button" class="btn btn-primary" id="readme-feedback-btn">Send feedback</button></p>
+        <div id="version-footer"></div>
+        <p>The version you are running is also shown in the footer. A small update adds 0.1; a larger one adds 1.0. <a href="changelog.html">Open the version history</a> for every release and what changed.</p>
+      </section>
+
+      <section class="readme-section">
+        <h3>About Homerun Baseball Ottawa</h3>
+        <p>Homerun Baseball Ottawa is a values-based youth baseball nonprofit in Ottawa, Canada. The app teaches the game the same way the club does: effort over talent, and the three values always in this order.</p>
+        <ul class="help-values">
+          <li class="help-value">
+            <img src="brand/icon-effort.jpg" alt="" class="help-value-icon" width="64" height="64">
+            <span class="help-value-name">Effort</span>
+          </li>
+          <li class="help-value">
+            <img src="brand/icon-respect.jpg" alt="" class="help-value-icon" width="64" height="64">
+            <span class="help-value-name">Respect</span>
+          </li>
+          <li class="help-value">
+            <img src="brand/icon-team.jpg" alt="" class="help-value-icon" width="64" height="64">
+            <span class="help-value-name">Team</span>
+          </li>
+        </ul>
+        <p>Coaches follow the ROOTS code:</p>
+        <ol class="roots-list">
+          <li><strong>Rules</strong></li>
+          <li><strong>Officials</strong></li>
+          <li><strong>Opponents</strong></li>
+          <li><strong>Teammates</strong></li>
+          <li><strong>Self</strong></li>
+        </ol>
+        <img src="brand/roots-diagram.jpg" alt="ROOTS coach code: Rules, Officials, Opponents, Teammates, Self" class="help-roots-img">
+      </section>
+
+    </div>
+  </section>
+
+</main>
+
+<footer id="app-footer" class="app-footer no-print">
+  <span class="app-footer-name">Homerun Learn to Play</span>
+  <span class="app-footer-version">v<span id="app-version-label"></span></span>
+  <button type="button" id="footer-whats-new" class="app-footer-link">What's new</button>
+  <a href="changelog.html" id="footer-changelog" class="app-footer-link">Version history</a>
+  <button type="button" id="footer-feedback" class="app-footer-link">Send feedback</button>
+</footer>
+
+<div id="modal-root"></div>
+<div id="toast-root" aria-live="polite"></div>
+
+<script src="version.js"></script>
+<script src="versionCompat.js"></script>
+<script src="uiModal.js"></script>
+<script src="src/glossary-data.js"></script>
+<script src="src/curriculum-data.js"></script>
+<script src="src/curriculum-t1.js"></script>
+<script src="src/curriculum-t2.js"></script>
+<script src="src/curriculum-t3.js"></script>
+<script src="src/curriculum-t4.js"></script>
+<script src="src/curriculum-t5.js"></script>
+<script src="src/curriculum-t6.js"></script>
+<script src="src/questions-data.js"></script>
+<script src="src/questions-t1.js"></script>
+<script src="src/questions-t2.js"></script>
+<script src="src/questions-t3.js"></script>
+<script src="src/questions-t4.js"></script>
+<script src="src/questions-t5.js"></script>
+<script src="src/questions-t6.js"></script>
+<script src="svg.js"></script>
+<script src="progress.js"></script>
+<script src="interactive.js"></script>
+<script src="quiz.js"></script>
+<script src="iq.js"></script>
+<script src="placement.js"></script>
+<script src="learn.js"></script>
+<script src="feedback.js"></script>
+<script src="changelog.js"></script>
+<script src="appUpdates.js"></script>
+<script src="shell.js"></script>
+<script>
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    navigator.serviceWorker.register('./sw.js');
+  }
+</script>
+</body>
+</html>
