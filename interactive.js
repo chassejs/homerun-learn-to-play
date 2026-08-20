@@ -1,6 +1,6 @@
 /* ===================================================================
    Homerun Learn to Play — interactive.js
-   Widget registry and the first eight interactive exercises.
+   Widget registry and sixteen interactive exercises.
    ES5-safe (var, function, string concatenation). Browser-only.
    =================================================================== */
 
@@ -2697,7 +2697,2324 @@ window.HRL_INTERACTIVE = (function () {
   }
 
   /* ------------------------------------------------------------------ */
-  /* Register the eight widgets                                          */
+  /* Shared helpers for the remaining eight widgets                      */
+  /* ------------------------------------------------------------------ */
+
+  var ROLE_ORDER = ['ball', 'base', 'backup'];
+  var STEAL_CHOICES = ['go', 'hold', 'balk'];
+  var BACKWARDS_K = '\uA4D8';
+
+  function answerText(answer, choices) {
+    var idx;
+    if (isArray(choices) && choices.length) {
+      idx = resolveAnswerIndex(answer, choices);
+      if (idx >= 0) return safeText(choices[idx]);
+    }
+    return safeText(answer);
+  }
+
+  function promptOrSituation(c) {
+    var t, sit;
+    t = casePrompt(c);
+    if (t) return t;
+    if (!c || typeof c !== 'object') return '';
+    sit = c.situation;
+    if (typeof sit === 'string') return trimStr(sit);
+    return '';
+  }
+
+  function nextCaseLabel(index, total) {
+    return index >= total - 1 ? 'Finish' : 'Next';
+  }
+
+  function roleNorm(v) {
+    var s = norm(v);
+    if (s === 'ball' || s === 'b') return 'ball';
+    if (s === 'base') return 'base';
+    if (s === 'backup' || s === 'back-up' || s === 'back up' || s === 'bu') return 'backup';
+    return s;
+  }
+
+  function roleInfo(role) {
+    var r = roleNorm(role);
+    if (r === 'ball') return { id: 'ball', word: 'Ball', glyph: 'B' };
+    if (r === 'base') return { id: 'base', word: 'Base', glyph: '\u25B2' };
+    if (r === 'backup') return { id: 'backup', word: 'Backup', glyph: '\u2302' };
+    return { id: '', word: 'Unassigned', glyph: '\u00B7' };
+  }
+
+  function alignmentLabel(id) {
+    var s = trimStr(id);
+    var n = norm(s);
+    if (n === 'standard') return 'Standard';
+    if (n === 'infield-in') return 'Infield in';
+    if (n === 'dp-depth' || n === 'double-play-depth' || n === 'double play depth') return 'Double-play depth';
+    if (n === 'no-doubles' || n === 'no doubles') return 'No doubles';
+    if (n === 'bunt-defense' || n === 'bunt-defence' || n === 'bunt defense' || n === 'bunt defence') return 'Bunt defence';
+    if (n === 'of-shallow' || n === 'outfield-shallow') return 'Outfield shallow';
+    if (n === 'of-deep' || n === 'outfield-deep') return 'Outfield deep';
+    if (n === 'corners-in') return 'Corners in';
+    return s || 'Alignment';
+  }
+
+  function alignmentId(v) {
+    var s = norm(v);
+    if (s === 'double-play-depth' || s === 'double play depth' || s === 'dp depth') return 'dp-depth';
+    if (s === 'bunt defence' || s === 'bunt-defence' || s === 'bunt defense') return 'bunt-defense';
+    if (s === 'no doubles') return 'no-doubles';
+    if (s === 'outfield-shallow' || s === 'outfield shallow') return 'of-shallow';
+    if (s === 'outfield-deep' || s === 'outfield deep') return 'of-deep';
+    if (s === 'infield in') return 'infield-in';
+    if (s === 'corners in') return 'corners-in';
+    return trimStr(v);
+  }
+
+  function callModeHint(mode) {
+    var m = norm(mode);
+    if (m === 'safety') return 'Safety call. When two answers sound kind, take the more conservative one.';
+    if (m === 'game-flow') return 'Game-flow call. Does the game keep going, and who bats?';
+    if (m === 'small-ball') return 'Small-ball call. Score, inning, outs, and the next hitter decide.';
+    if (m === 'approach') return 'Approach call. Hunt the zone, or protect it.';
+    if (m === 'management') return 'Management call. Playing time, visits, protests, and who may talk.';
+    if (m === 'rules') return 'Rules call. Read the conditions, then pick the ruling.';
+    return 'Make the call. Read the situation, then pick the ruling.';
+  }
+
+  function stealMoveCaption(move) {
+    var m = trimStr(move);
+    if (m === 'rhp-home') return 'Right-hander: free foot steps toward home. That is a pitch.';
+    if (m === 'rhp-pickoff-first') return 'Right-hander: free foot steps toward first. That is a pickoff.';
+    if (m === 'rhp-fake-first-on-rubber') return 'Right-hander still on the rubber, feinting to first.';
+    if (m === 'step-off-fake-first') return 'Pivot foot steps back off the rubber, then a feint to first.';
+    if (m === 'lhp-crosses-45') return 'Left-hander: free foot crosses the 45-degree line toward the plate.';
+    if (m === 'lhp-step-first') return 'Left-hander: free foot steps toward first. That is a pickoff.';
+    if (m === 'fake-to-third') return 'Feint to third while still in contact with the rubber.';
+    if (m === 'no-stop') return 'From the stretch: no complete stop before the delivery.';
+    return m ? 'Move: ' + m + '.' : 'Watch the free foot.';
+  }
+
+  function stealChoiceLabel(id) {
+    var s = norm(id);
+    if (s === 'go') return 'Go';
+    if (s === 'hold') return 'Hold';
+    if (s === 'balk') return 'Balk';
+    return safeText(id);
+  }
+
+  function paintExplain(host, text) {
+    if (!host) return;
+    host.innerHTML = '';
+    if (!text) {
+      host.style.display = 'none';
+      return;
+    }
+    host.style.display = '';
+    host.className = 'quiz-explain';
+    host.appendChild(el('p', { text: text }));
+  }
+
+  function columnStack(node) {
+    if (!node) return node;
+    node.style.display = 'flex';
+    node.style.flexDirection = 'column';
+    node.style.gap = '0.4rem';
+    return node;
+  }
+
+  function setPressed(btn, on) {
+    if (!btn) return;
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 9. assignTheNine                                                    */
+  /* ------------------------------------------------------------------ */
+
+  function situationLine(c) {
+    var s, bits, r, t;
+    t = promptOrSituation(c);
+    if (t) return t;
+    s = c && c.situation && typeof c.situation === 'object' ? c.situation : null;
+    if (!s) return '';
+    bits = [];
+    if (s.hitType) bits.push(safeText(s.hitType));
+    if (s.location) bits.push('to ' + safeText(s.location));
+    r = asList(s.runners);
+    if (!r.length) bits.push('nobody on');
+    else bits.push('runner' + (r.length === 1 ? '' : 's') + ' on ' + r.join(', '));
+    if (s.outs != null && s.outs !== '') {
+      bits.push(safeText(s.outs) + ' out' + (Number(s.outs) === 1 ? '' : 's'));
+    }
+    return bits.join('. ');
+  }
+
+  function assignCasesFrom(opts) {
+    var list, i, c, out, k, n;
+    list = validCases(opts, 'cases');
+    out = [];
+    for (i = 0; i < list.length; i++) {
+      c = list[i];
+      if (!c.correct || typeof c.correct !== 'object') continue;
+      n = 0;
+      for (k = 0; k < ALL_POSITIONS.length; k++) {
+        if (roleNorm(c.correct[ALL_POSITIONS[k]])) n += 1;
+      }
+      if (n) out.push(c);
+    }
+    return out;
+  }
+
+  function mountAssignTheNine(container, opts, onComplete, ctx) {
+    var cases, root, progressHost, sitEl, diagramHost, legendEl, gridEl, explainEl;
+    var state;
+
+    opts = opts && typeof opts === 'object' ? opts : {};
+    cases = assignCasesFrom(opts);
+    if (!cases.length) {
+      setEmpty(container, 'This exercise is unavailable.', 'No ball-base-backup situations were provided.');
+      return;
+    }
+
+    state = {
+      index: 0,
+      assign: {},
+      selectedRole: null,
+      fails: 0,
+      resolved: false,
+      done: false,
+      marks: {},
+      jobCorrect: 0,
+      caseHits: 0
+    };
+
+    root = el('div');
+    fullWidth(root);
+    container.appendChild(root);
+    progressHost = el('div');
+    root.appendChild(progressHost);
+    sitEl = el('p');
+    root.appendChild(sitEl);
+    root.appendChild(el('p', {
+      class: 'hint',
+      text: 'Every fielder gets one job: Ball (fields it), Base (covers a bag or the cutoff/relay), or Backup (behind a throw or a teammate). Pick a role, then tap a fielder — or use the three buttons on each row.'
+    }));
+    legendEl = flex(el('div'));
+    legendEl.style.marginBottom = '0.35rem';
+    root.appendChild(legendEl);
+    diagramHost = el('div');
+    diagramHost.style.position = 'relative';
+    diagramHost.style.width = '100%';
+    root.appendChild(diagramHost);
+    gridEl = el('div');
+    root.appendChild(gridEl);
+    explainEl = el('div');
+    root.appendChild(explainEl);
+
+    function current() {
+      return cases[state.index];
+    }
+
+    function expectedRole(id) {
+      var c = current();
+      if (!c || !c.correct) return '';
+      return roleNorm(c.correct[id]);
+    }
+
+    function jobsTotal() {
+      return cases.length * ALL_POSITIONS.length;
+    }
+
+    function scoreNow() {
+      var i, id, n;
+      n = 0;
+      for (i = 0; i < ALL_POSITIONS.length; i++) {
+        id = ALL_POSITIONS[i];
+        if (roleNorm(state.assign[id]) && roleNorm(state.assign[id]) === expectedRole(id)) n += 1;
+      }
+      return n;
+    }
+
+    function assignedCount() {
+      var i, n;
+      n = 0;
+      for (i = 0; i < ALL_POSITIONS.length; i++) {
+        if (roleNorm(state.assign[ALL_POSITIONS[i]])) n += 1;
+      }
+      return n;
+    }
+
+    function rolesForDraw() {
+      var out, i, id, r;
+      out = {};
+      for (i = 0; i < ALL_POSITIONS.length; i++) {
+        id = ALL_POSITIONS[i];
+        r = roleNorm(state.assign[id]);
+        if (r) out[id] = r;
+      }
+      return out;
+    }
+
+    function drawField() {
+      var c, diagram, svgName, svgOpts, sit;
+      c = current();
+      diagram = c.diagram && typeof c.diagram === 'object' ? c.diagram : null;
+      svgName = (diagram && diagram.svg) ? diagram.svg : 'field';
+      svgOpts = diagram && diagram.opts ? copyObj(diagram.opts) : {};
+      svgOpts.positions = true;
+      svgOpts.hotspots = ALL_POSITIONS;
+      svgOpts.roles = rolesForDraw();
+      sit = c.situation && typeof c.situation === 'object' ? c.situation : null;
+      if (sit && sit.runners && svgOpts.runners === undefined) svgOpts.runners = sit.runners;
+      if (!svgOpts.title) svgOpts.title = situationLine(c) || 'Assign the nine';
+      renderSvg(diagramHost, svgName, svgOpts);
+      bindHotspots(diagramHost, function (id) {
+        if (indexOf(ALL_POSITIONS, id) === -1) return;
+        applyRole(id, state.selectedRole);
+      });
+    }
+
+    function applyRole(posId, role) {
+      var r;
+      if (state.resolved || state.done) return;
+      r = roleNorm(role);
+      if (!r) {
+        ctx.status(container, 'Pick Ball, Base, or Backup, then tap a fielder.', 'info');
+        return;
+      }
+      if (indexOf(ALL_POSITIONS, posId) === -1) return;
+      state.assign[posId] = r;
+      state.marks = {};
+      paintGrid();
+      drawField();
+      paintStatus();
+    }
+
+    function paintLegend() {
+      var i, info, btn, r;
+      legendEl.innerHTML = '';
+      for (i = 0; i < ROLE_ORDER.length; i++) {
+        r = ROLE_ORDER[i];
+        info = roleInfo(r);
+        btn = el('button', {
+          type: 'button',
+          class: 'token' + (state.selectedRole === r ? ' selected' : ''),
+          text: info.glyph + ' ' + info.word
+        });
+        btn.setAttribute('aria-label', 'Select role ' + info.word);
+        setPressed(btn, state.selectedRole === r);
+        if (state.resolved || state.done) btn.disabled = true;
+        (function (id) {
+          bindActivate(btn, function () {
+            if (state.resolved || state.done) return;
+            state.selectedRole = state.selectedRole === id ? null : id;
+            paintLegend();
+            paintStatus();
+          });
+        }(r));
+        legendEl.appendChild(btn);
+      }
+    }
+
+    function paintGrid() {
+      var i, id, row, nameEl, btns, j, role, info, btn, got, exp, mark, lab;
+      gridEl.innerHTML = '';
+      for (i = 0; i < ALL_POSITIONS.length; i++) {
+        id = ALL_POSITIONS[i];
+        got = roleNorm(state.assign[id]);
+        exp = expectedRole(id);
+        mark = state.marks[id] || '';
+        row = flex(el('div', {
+          class: 'dropzone' + (mark ? ' ' + mark : ''),
+          role: 'group'
+        }));
+        row.style.justifyContent = 'space-between';
+        row.style.width = '100%';
+        row.style.marginTop = '0.35rem';
+        lab = (positionNumber(id) != null ? String(positionNumber(id)) + ' ' : '') +
+          String(id).toUpperCase() + ' ' + positionName(id);
+        row.setAttribute('aria-label', lab + (got ? ', ' + roleInfo(got).word : ', unassigned'));
+        nameEl = el('span', { text: lab });
+        nameEl.style.minWidth = '7rem';
+        nameEl.style.fontWeight = '700';
+        row.appendChild(nameEl);
+        btns = flex(el('div'));
+        for (j = 0; j < ROLE_ORDER.length; j++) {
+          role = ROLE_ORDER[j];
+          info = roleInfo(role);
+          btn = el('button', {
+            type: 'button',
+            class: 'btn btn-sm ' + (got === role ? 'btn-primary' : 'btn-ghost'),
+            text: info.glyph + ' ' + info.word
+          });
+          btn.setAttribute('aria-label', positionName(id) + ' ' + info.word);
+          setPressed(btn, got === role);
+          if (state.resolved || state.done) btn.disabled = true;
+          (function (pos, r) {
+            bindActivate(btn, function () {
+              applyRole(pos, r);
+            });
+          }(id, role));
+          btns.appendChild(btn);
+        }
+        row.appendChild(btns);
+        gridEl.appendChild(row);
+      }
+    }
+
+    function paintProgress() {
+      var pct;
+      progressHost.innerHTML = '';
+      pct = Math.round((state.index / cases.length) * 100);
+      if (state.done) pct = 100;
+      progressHost.appendChild(progressRow(pct, 'Situation progress'));
+    }
+
+    function runningLine() {
+      return 'Jobs correct so far: ' + state.jobCorrect + ' of ' + jobsTotal() +
+        '. Perfect situations: ' + state.caseHits + ' of ' + cases.length + '.';
+    }
+
+    function paintStatus() {
+      var n, msg, info;
+      if (state.done) return;
+      n = assignedCount();
+      if (state.selectedRole) {
+        info = roleInfo(state.selectedRole);
+        msg = 'Role selected: ' + info.word + ' (' + info.glyph + '). Tap a fielder to assign it. ' +
+          n + ' of 9 assigned.';
+      } else if (n) {
+        msg = n + ' of 9 assigned. Check when every fielder has a job.';
+      } else {
+        msg = 'Situation ' + (state.index + 1) + ' of ' + cases.length + '. Assign every position.';
+      }
+      ctx.status(container, msg + ' ' + runningLine(), 'info');
+    }
+
+    function revealCorrect() {
+      var i, id;
+      for (i = 0; i < ALL_POSITIONS.length; i++) {
+        id = ALL_POSITIONS[i];
+        state.assign[id] = expectedRole(id);
+        state.marks[id] = 'correct';
+      }
+    }
+
+    function markAgainstKey() {
+      var i, id, got, exp;
+      for (i = 0; i < ALL_POSITIONS.length; i++) {
+        id = ALL_POSITIONS[i];
+        got = roleNorm(state.assign[id]);
+        exp = expectedRole(id);
+        if (got && got === exp) state.marks[id] = 'correct';
+        else state.marks[id] = 'wrong';
+      }
+    }
+
+    function lockCase(nOk) {
+      state.resolved = true;
+      state.jobCorrect += nOk;
+      if (nOk === ALL_POSITIONS.length) state.caseHits += 1;
+    }
+
+    function goNext() {
+      state.index += 1;
+      state.assign = {};
+      state.selectedRole = null;
+      state.fails = 0;
+      state.resolved = false;
+      state.marks = {};
+      if (state.index >= cases.length) {
+        state.done = true;
+        paintProgress();
+        sitEl.innerHTML = esc(
+          'Done. You assigned ' + state.jobCorrect + ' of ' + jobsTotal() +
+          ' jobs correctly. ' + state.caseHits + ' situation' +
+          (state.caseHits === 1 ? '' : 's') + ' fully right.'
+        );
+        paintLegend();
+        paintGrid();
+        paintExplain(explainEl, runningLine());
+        ctx.status(
+          container,
+          'All situations complete. ' + state.jobCorrect + ' of ' + jobsTotal() + ' jobs correct.',
+          'ok'
+        );
+        ctx.actions(container, [
+          { label: 'Check', kind: 'primary', disabled: true, onClick: function () {} },
+          { label: 'Reset', kind: 'ghost', onClick: doReset }
+        ]);
+        fireComplete(onComplete, state.jobCorrect, jobsTotal());
+        return;
+      }
+      paintAll();
+    }
+
+    function actionsFor() {
+      var buttons;
+      if (state.done) return;
+      if (state.resolved) {
+        ctx.actions(container, [
+          { label: nextCaseLabel(state.index, cases.length), kind: 'primary', onClick: goNext },
+          { label: 'Reset', kind: 'ghost', onClick: doReset }
+        ]);
+        return;
+      }
+      buttons = [
+        { label: 'Check', kind: 'primary', onClick: doCheck },
+        { label: 'Reset', kind: 'ghost', onClick: doReset }
+      ];
+      if (state.fails >= 1) {
+        buttons.splice(1, 0, { label: 'Show the answer', kind: 'accent', onClick: doShow });
+      }
+      ctx.actions(container, buttons);
+    }
+
+    function doCheck() {
+      var n, rationale, msg;
+      if (state.done) return;
+      if (state.resolved) {
+        goNext();
+        return;
+      }
+      n = scoreNow();
+      markAgainstKey();
+      rationale = trimStr(current().rationale || current().explain);
+      if (n === ALL_POSITIONS.length) {
+        lockCase(n);
+        paintLegend();
+        paintGrid();
+        drawField();
+        paintExplain(explainEl, rationale);
+        ctx.status(container, 'All nine jobs right. ' + rationale + ' ' + runningLine(), 'ok');
+        actionsFor();
+        return;
+      }
+      state.fails += 1;
+      if (state.fails >= 2) {
+        lockCase(n);
+        revealCorrect();
+        paintLegend();
+        paintGrid();
+        drawField();
+        paintExplain(explainEl, rationale);
+        ctx.status(
+          container,
+          'Showing the nine jobs. You had ' + n + ' of 9. ' + rationale,
+          'wrong'
+        );
+        actionsFor();
+        return;
+      }
+      paintGrid();
+      drawField();
+      paintExplain(explainEl, rationale);
+      msg = n + ' of 9 right. Fix the red rows and check again.';
+      if (rationale) msg += ' ' + rationale;
+      ctx.status(container, msg, 'wrong');
+      actionsFor();
+    }
+
+    function doShow() {
+      var n;
+      if (state.done || state.resolved) return;
+      n = scoreNow();
+      lockCase(n);
+      revealCorrect();
+      paintLegend();
+      paintGrid();
+      drawField();
+      paintExplain(explainEl, trimStr(current().rationale || current().explain));
+      ctx.status(container, 'Showing the nine jobs. You had ' + n + ' of 9.', 'ok');
+      actionsFor();
+    }
+
+    function doReset() {
+      state.index = 0;
+      state.assign = {};
+      state.selectedRole = null;
+      state.fails = 0;
+      state.resolved = false;
+      state.done = false;
+      state.marks = {};
+      state.jobCorrect = 0;
+      state.caseHits = 0;
+      paintAll();
+    }
+
+    function paintAll() {
+      var c = current();
+      paintProgress();
+      sitEl.innerHTML = esc(
+        'Situation ' + (state.index + 1) + ' of ' + cases.length + '. ' + situationLine(c)
+      );
+      paintLegend();
+      paintGrid();
+      drawField();
+      paintExplain(explainEl, '');
+      paintStatus();
+      actionsFor();
+    }
+
+    paintAll();
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 10. stealRead                                                       */
+  /* ------------------------------------------------------------------ */
+
+  function stealRunnersFor(move) {
+    var m = trimStr(move);
+    if (m === 'fake-to-third') return ['first', 'third'];
+    return ['first'];
+  }
+
+  function drawStealMove(host, move, reduced) {
+    var m, footX, footY, toX, toY, label, parts, hand;
+    m = trimStr(move);
+    footX = 180;
+    footY = 112;
+    toX = footX;
+    toY = footY;
+    label = stealMoveCaption(m);
+    if (m === 'rhp-home' || m === 'no-stop') {
+      toX = 180;
+      toY = 168;
+    } else if (
+      m === 'rhp-pickoff-first' ||
+      m === 'rhp-fake-first-on-rubber' ||
+      m === 'lhp-step-first' ||
+      m === 'step-off-fake-first'
+    ) {
+      toX = 268;
+      toY = 100;
+    } else if (m === 'lhp-crosses-45') {
+      toX = 218;
+      toY = 158;
+    } else if (m === 'fake-to-third') {
+      toX = 92;
+      toY = 100;
+    } else {
+      toX = 180;
+      toY = 158;
+    }
+    if (m === 'step-off-fake-first') {
+      footX = 180;
+      footY = 124;
+    }
+    parts = [];
+    parts.push('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 220" width="100%" class="hrl-svg" role="img">');
+    parts.push('<title>' + esc(label) + '</title>');
+    parts.push('<desc>' + esc(label) + '</desc>');
+    parts.push('<rect x="8" y="8" width="344" height="204" rx="10" fill="#f4efe4" stroke="#1e3a5f" stroke-width="1"/>');
+    parts.push('<rect x="168" y="84" width="24" height="6" fill="#fff" stroke="#1e3a5f"/>');
+    parts.push('<polygon points="180,192 166,176 194,176" fill="#fff" stroke="#1e3a5f"/>');
+    parts.push('<rect x="292" y="86" width="12" height="12" transform="rotate(45 298 92)" fill="#fff" stroke="#1e3a5f"/>');
+    parts.push('<rect x="50" y="86" width="12" height="12" transform="rotate(45 56 92)" fill="#fff" stroke="#1e3a5f"/>');
+    parts.push('<text x="180" y="212" text-anchor="middle" font-size="11">Home</text>');
+    parts.push('<text x="318" y="80" text-anchor="middle" font-size="11">1B</text>');
+    parts.push('<text x="40" y="80" text-anchor="middle" font-size="11">3B</text>');
+    parts.push('<circle cx="180" cy="70" r="8" fill="#1e3a5f"/>');
+    parts.push('<line x1="180" y1="78" x2="180" y2="108" stroke="#1e3a5f" stroke-width="3"/>');
+    parts.push('<circle cx="172" cy="112" r="5" fill="#1e3a5f"/>');
+    hand = m.indexOf('lhp') === 0 ? 'LHP' : 'RHP';
+    parts.push('<text x="20" y="28" font-size="12" font-weight="700">' + esc(hand) + '</text>');
+    parts.push('<text x="180" y="36" text-anchor="middle" font-size="12">' + esc(label) + '</text>');
+    parts.push('<line x1="180" y1="100" x2="' + toX + '" y2="' + toY +
+      '" stroke="#dc2626" stroke-width="2" stroke-dasharray="4 3"/>');
+    if (!reduced) {
+      parts.push('<circle cx="' + footX + '" cy="' + footY + '" r="6" fill="#dc2626">');
+      parts.push('<animate attributeName="cx" values="' + footX + ';' + toX + ';' + footX +
+        '" dur="1.4s" repeatCount="indefinite"/>');
+      parts.push('<animate attributeName="cy" values="' + footY + ';' + toY + ';' + footY +
+        '" dur="1.4s" repeatCount="indefinite"/>');
+      parts.push('</circle>');
+    } else {
+      parts.push('<circle cx="' + toX + '" cy="' + toY + '" r="6" fill="#dc2626"/>');
+    }
+    parts.push('</svg>');
+    host.innerHTML = parts.join('');
+  }
+
+  function mountStealRead(container, opts, onComplete, ctx) {
+    var cases, root, metaEl, descEl, pathHost, moveHost, choiceBar, explainEl, tellEl;
+    var state;
+
+    opts = opts && typeof opts === 'object' ? opts : {};
+    cases = validCases(opts, 'cases');
+    if (!cases.length) {
+      setEmpty(container, 'This exercise is unavailable.', 'No pitcher-move cases were provided.');
+      return;
+    }
+
+    state = {
+      index: 0,
+      picked: null,
+      fails: 0,
+      correct: 0,
+      resolved: false,
+      done: false
+    };
+
+    root = el('div');
+    fullWidth(root);
+    container.appendChild(root);
+    metaEl = el('p', { class: 'hint' });
+    root.appendChild(metaEl);
+    descEl = el('p');
+    root.appendChild(descEl);
+    pathHost = el('div');
+    root.appendChild(pathHost);
+    moveHost = el('div');
+    root.appendChild(moveHost);
+    tellEl = el('p', { class: 'hint' });
+    root.appendChild(tellEl);
+    choiceBar = columnStack(el('div'));
+    root.appendChild(choiceBar);
+    explainEl = el('div');
+    root.appendChild(explainEl);
+
+    function current() {
+      return cases[state.index];
+    }
+
+    function expected() {
+      var c = current();
+      var idx;
+      idx = resolveAnswerIndex(c.answer, STEAL_CHOICES);
+      if (idx >= 0) return STEAL_CHOICES[idx];
+      return norm(c.answer);
+    }
+
+    function paintChoices() {
+      var i, id, btn, exp, isPicked, isRight;
+      choiceBar.innerHTML = '';
+      exp = expected();
+      for (i = 0; i < STEAL_CHOICES.length; i++) {
+        id = STEAL_CHOICES[i];
+        isPicked = state.picked === id;
+        isRight = id === exp;
+        btn = el('button', {
+          type: 'button',
+          class: 'choice-btn' +
+            (isPicked ? ' selected' : '') +
+            (state.resolved && isRight ? ' correct' : '') +
+            (isPicked && !isRight && state.fails ? ' wrong' : ''),
+          text: stealChoiceLabel(id)
+        });
+        setPressed(btn, isPicked);
+        if (id === 'go') btn.setAttribute('aria-label', 'Go — it is a pitch, steal');
+        if (id === 'hold') btn.setAttribute('aria-label', 'Hold — pickoff or legal disengage, get back');
+        if (id === 'balk') btn.setAttribute('aria-label', 'Balk — illegal move, you advance');
+        if (state.resolved || state.done) btn.disabled = true;
+        (function (choice) {
+          bindActivate(btn, function () {
+            if (state.resolved || state.done) return;
+            state.picked = choice;
+            paintChoices();
+          });
+        }(id));
+        choiceBar.appendChild(btn);
+      }
+    }
+
+    function drawCase() {
+      var c = current();
+      var reduced = ctx.reducedMotion();
+      renderSvg(pathHost, 'basePaths', {
+        runners: stealRunnersFor(c.move),
+        title: 'Runner at first',
+        desc: 'Diamond with the runner the steal read is about.'
+      });
+      drawStealMove(moveHost, c.move, reduced);
+    }
+
+    function goNext() {
+      state.index += 1;
+      state.picked = null;
+      state.fails = 0;
+      state.resolved = false;
+      if (state.index >= cases.length) {
+        state.done = true;
+        ctx.status(container, 'Done. ' + state.correct + ' of ' + cases.length + ' reads correct.', 'ok');
+        fireComplete(onComplete, state.correct, cases.length);
+        ctx.actions(container, [
+          { label: 'Check', kind: 'primary', disabled: true, onClick: function () {} },
+          { label: 'Reset', kind: 'ghost', onClick: doReset }
+        ]);
+        return;
+      }
+      paintAll();
+    }
+
+    function doCheck() {
+      var c, expl, exp;
+      if (state.done) return;
+      if (state.resolved) {
+        goNext();
+        return;
+      }
+      c = current();
+      if (!state.picked) {
+        ctx.status(container, 'Pick Go, Hold, or Balk first.', 'info');
+        return;
+      }
+      exp = expected();
+      expl = trimStr(c.explain);
+      if (state.picked === exp) {
+        state.correct += 1;
+        state.resolved = true;
+        paintChoices();
+        paintExplain(explainEl, expl);
+        ctx.status(container, 'Correct. ' + expl, 'ok');
+        ctx.actions(container, [
+          { label: nextCaseLabel(state.index, cases.length), kind: 'primary', onClick: doCheck },
+          { label: 'Reset', kind: 'ghost', onClick: doReset }
+        ]);
+        return;
+      }
+      state.fails += 1;
+      paintChoices();
+      if (state.fails >= 2) {
+        state.resolved = true;
+        paintChoices();
+        paintExplain(explainEl, expl);
+        ctx.status(container, 'The read is ' + stealChoiceLabel(exp) + '. ' + expl, 'wrong');
+        ctx.actions(container, [
+          { label: nextCaseLabel(state.index, cases.length), kind: 'primary', onClick: doCheck },
+          { label: 'Reset', kind: 'ghost', onClick: doReset }
+        ]);
+        return;
+      }
+      ctx.status(container, 'Not that read. Watch the free foot and try once more.', 'wrong');
+    }
+
+    function doReset() {
+      state.index = 0;
+      state.picked = null;
+      state.fails = 0;
+      state.correct = 0;
+      state.resolved = false;
+      state.done = false;
+      paintAll();
+    }
+
+    function paintAll() {
+      var c = current();
+      metaEl.innerHTML = esc('Move ' + (state.index + 1) + ' of ' + cases.length + '.');
+      descEl.innerHTML = esc(promptOrSituation(c) || stealMoveCaption(c.move));
+      tellEl.innerHTML = esc('Go = it is a pitch, steal. Hold = pickoff or legal disengage, get back. Balk = the move itself is illegal; you advance.');
+      drawCase();
+      paintChoices();
+      paintExplain(explainEl, '');
+      ctx.status(container, 'Read the free foot. Pick Go, Hold, or Balk, then Check.', 'info');
+      ctx.actions(container, [
+        { label: 'Check', kind: 'primary', onClick: doCheck },
+        { label: 'Reset', kind: 'ghost', onClick: doReset }
+      ]);
+    }
+
+    paintAll();
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 11. makeTheCall                                                     */
+  /* ------------------------------------------------------------------ */
+
+  function mountMakeTheCall(container, opts, onComplete, ctx) {
+    var cases, mode, root, modeEl, promptEl, choiceBar, metaEl, explainEl;
+    var state;
+
+    opts = opts && typeof opts === 'object' ? opts : {};
+    cases = validCases(opts, 'cases');
+    if (!cases.length) {
+      setEmpty(container, 'This exercise is unavailable.', 'No rulings were provided.');
+      return;
+    }
+    mode = trimStr(opts.mode);
+
+    state = {
+      index: 0,
+      picked: null,
+      fails: 0,
+      correct: 0,
+      resolved: false,
+      done: false
+    };
+
+    root = el('div');
+    fullWidth(root);
+    container.appendChild(root);
+    modeEl = el('p', { class: 'hint' });
+    root.appendChild(modeEl);
+    promptEl = el('p');
+    root.appendChild(promptEl);
+    choiceBar = columnStack(el('div'));
+    root.appendChild(choiceBar);
+    metaEl = el('p', { class: 'hint' });
+    root.appendChild(metaEl);
+    explainEl = el('div');
+    root.appendChild(explainEl);
+
+    function current() {
+      return cases[state.index];
+    }
+
+    function choicesOf(c) {
+      return c && isArray(c.choices) ? c.choices : [];
+    }
+
+    function rulingBits(c) {
+      var bits = [];
+      if (c.rule) bits.push('Rule: ' + trimStr(c.rule) + '.');
+      if (c.division) bits.push('Applies: ' + trimStr(c.division) + '.');
+      return bits.join(' ');
+    }
+
+    function paintChoices() {
+      var c, ch, i, btn, correctIdx, isPicked, isRight;
+      c = current();
+      ch = choicesOf(c);
+      correctIdx = resolveAnswerIndex(c.answer, ch);
+      choiceBar.innerHTML = '';
+      if (!ch.length) {
+        choiceBar.appendChild(el('p', { class: 'hint', text: 'No choices were provided for this case.' }));
+        return;
+      }
+      for (i = 0; i < ch.length; i++) {
+        isPicked = state.picked === i;
+        isRight = i === correctIdx;
+        btn = el('button', {
+          type: 'button',
+          class: 'choice-btn' +
+            (isPicked ? ' selected' : '') +
+            (state.resolved && isRight ? ' correct' : '') +
+            (isPicked && !isRight && state.fails ? ' wrong' : ''),
+          text: safeText(ch[i])
+        });
+        setPressed(btn, isPicked);
+        if (state.resolved || state.done) btn.disabled = true;
+        (function (idx) {
+          bindActivate(btn, function () {
+            if (state.resolved || state.done) return;
+            state.picked = idx;
+            paintChoices();
+          });
+        }(i));
+        choiceBar.appendChild(btn);
+      }
+    }
+
+    function paintMeta(show) {
+      var c = current();
+      var bits = [];
+      if (show) {
+        if (c.rule) bits.push('Rule: ' + trimStr(c.rule));
+        if (c.division) bits.push('Divisions: ' + trimStr(c.division));
+      }
+      metaEl.innerHTML = bits.length ? esc(bits.join('. ') + '.') : '';
+    }
+
+    function goNext() {
+      state.index += 1;
+      state.picked = null;
+      state.fails = 0;
+      state.resolved = false;
+      if (state.index >= cases.length) {
+        state.done = true;
+        ctx.status(container, 'Done. ' + state.correct + ' of ' + cases.length + ' rulings correct.', 'ok');
+        fireComplete(onComplete, state.correct, cases.length);
+        ctx.actions(container, [
+          { label: 'Check', kind: 'primary', disabled: true, onClick: function () {} },
+          { label: 'Reset', kind: 'ghost', onClick: doReset }
+        ]);
+        return;
+      }
+      paintAll();
+    }
+
+    function doCheck() {
+      var c, ch, expl, extra;
+      if (state.done) return;
+      if (state.resolved) {
+        goNext();
+        return;
+      }
+      c = current();
+      ch = choicesOf(c);
+      if (state.picked == null) {
+        ctx.status(container, 'Pick a ruling first.', 'info');
+        return;
+      }
+      expl = trimStr(c.explain);
+      extra = rulingBits(c);
+      if (choiceIsCorrect(c.answer, ch, state.picked)) {
+        state.correct += 1;
+        state.resolved = true;
+        paintChoices();
+        paintMeta(true);
+        paintExplain(explainEl, expl + (extra ? ' ' + extra : ''));
+        ctx.status(container, 'Correct. ' + expl, 'ok');
+        ctx.actions(container, [
+          { label: nextCaseLabel(state.index, cases.length), kind: 'primary', onClick: doCheck },
+          { label: 'Reset', kind: 'ghost', onClick: doReset }
+        ]);
+        return;
+      }
+      state.fails += 1;
+      paintChoices();
+      if (state.fails >= 2) {
+        state.resolved = true;
+        paintChoices();
+        paintMeta(true);
+        paintExplain(explainEl, expl + (extra ? ' ' + extra : ''));
+        ctx.status(
+          container,
+          'The ruling is: ' + answerText(c.answer, ch) + '. ' + expl,
+          'wrong'
+        );
+        ctx.actions(container, [
+          { label: nextCaseLabel(state.index, cases.length), kind: 'primary', onClick: doCheck },
+          { label: 'Reset', kind: 'ghost', onClick: doReset }
+        ]);
+        return;
+      }
+      ctx.status(container, 'Not that ruling. Read the conditions again.', 'wrong');
+    }
+
+    function doReset() {
+      state.index = 0;
+      state.picked = null;
+      state.fails = 0;
+      state.correct = 0;
+      state.resolved = false;
+      state.done = false;
+      paintAll();
+    }
+
+    function paintAll() {
+      var c = current();
+      modeEl.innerHTML = esc(
+        'Case ' + (state.index + 1) + ' of ' + cases.length + '. ' + callModeHint(mode)
+      );
+      promptEl.innerHTML = esc(promptOrSituation(c));
+      paintChoices();
+      paintMeta(false);
+      paintExplain(explainEl, '');
+      ctx.status(container, 'Read the situation. Pick a ruling, then Check.', 'info');
+      ctx.actions(container, [
+        { label: 'Check', kind: 'primary', onClick: doCheck },
+        { label: 'Reset', kind: 'ghost', onClick: doReset }
+      ]);
+    }
+
+    paintAll();
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 12. sequencePitches                                                 */
+  /* ------------------------------------------------------------------ */
+
+  function pitchHeightBand(p) {
+    var loc, y;
+    if (!p || typeof p !== 'object') return 'mid';
+    loc = norm(p.location);
+    if (loc === 'elevated' || loc === 'high' || loc === 'up') return 'high';
+    if (loc === 'dirt' || loc.indexOf('low') === 0 || loc === 'down') return 'low';
+    y = Number(p.y);
+    if (y === y) {
+      if (y <= 0.22) return 'high';
+      if (y >= 0.62) return 'low';
+    }
+    return 'mid';
+  }
+
+  function pitchSpeedBand(p) {
+    var t = norm(p && p.type);
+    if (!t) return 'other';
+    if (t.indexOf('fast') === 0 || t === 'fb' || t === 'four-seam' || t === 'sinker' || t === 'cutter' || t === 'two-seam') {
+      return 'fast';
+    }
+    return 'off';
+  }
+
+  function pitchLabel(p) {
+    var type, loc;
+    if (!p || typeof p !== 'object') return safeText(p);
+    type = trimStr(p.type) || 'pitch';
+    loc = trimStr(p.location);
+    return loc ? type + ' · ' + loc : type;
+  }
+
+  function sequenceFlags(seq) {
+    var i, heights, speeds, hN, sN, h, s, k;
+    heights = {};
+    speeds = {};
+    hN = 0;
+    sN = 0;
+    for (i = 0; i < seq.length; i++) {
+      h = pitchHeightBand(seq[i]);
+      s = pitchSpeedBand(seq[i]);
+      if (!heights[h]) {
+        heights[h] = true;
+        hN += 1;
+      }
+      if (!speeds[s]) {
+        speeds[s] = true;
+        sN += 1;
+      }
+    }
+    return { changedLevel: hN > 1, changedSpeed: sN > 1 };
+  }
+
+  function sequencesMatch(a, b) {
+    var i;
+    if (!a || !b || a.length !== b.length) return false;
+    for (i = 0; i < a.length; i++) {
+      if (norm(a[i].type) !== norm(b[i].type)) return false;
+      if (norm(a[i].location) !== norm(b[i].location)) return false;
+    }
+    return true;
+  }
+
+  function idealList(c) {
+    return c && isArray(c.ideal) ? c.ideal : [];
+  }
+
+  function availablePitches(c) {
+    var raw, i, out, p;
+    raw = c && isArray(c.pitches) ? c.pitches : [];
+    out = [];
+    for (i = 0; i < raw.length; i++) {
+      p = raw[i];
+      if (p && typeof p === 'object' && (p.type || p.location)) out.push(p);
+    }
+    return out;
+  }
+
+  function mountSequencePitches(container, opts, onComplete, ctx) {
+    var cases, root, headEl, countEl, zoneHost, availBar, seqBar, explainEl;
+    var state;
+
+    opts = opts && typeof opts === 'object' ? opts : {};
+    cases = validCases(opts, 'cases');
+    if (!cases.length) {
+      setEmpty(container, 'This exercise is unavailable.', 'No pitch-sequence cases were provided.');
+      return;
+    }
+
+    state = {
+      index: 0,
+      picked: [],
+      fails: 0,
+      correct: 0,
+      resolved: false,
+      done: false
+    };
+
+    root = el('div');
+    fullWidth(root);
+    container.appendChild(root);
+    headEl = el('p');
+    root.appendChild(headEl);
+    countEl = el('p', { class: 'hint' });
+    root.appendChild(countEl);
+    zoneHost = el('div');
+    root.appendChild(zoneHost);
+    root.appendChild(el('p', {
+      class: 'hint',
+      text: 'Build a three-pitch sequence from the pitches on offer. More than one good sequence exists. Grade is whether you changed eye level and changed speeds the way this hitter asks — not an exact match.'
+    }));
+    availBar = flex(el('div'));
+    root.appendChild(availBar);
+    seqBar = el('div');
+    root.appendChild(seqBar);
+    explainEl = el('div');
+    root.appendChild(explainEl);
+
+    function current() {
+      return cases[state.index];
+    }
+
+    function drawZone() {
+      var i, p, plotted;
+      plotted = [];
+      for (i = 0; i < state.picked.length; i++) {
+        p = state.picked[i];
+        plotted.push({
+          x: (p.x != null && Number(p.x) === Number(p.x)) ? Number(p.x) : 0.5,
+          y: (p.y != null && Number(p.y) === Number(p.y)) ? Number(p.y) : 0.4,
+          call: p.call || 'called-strike',
+          n: i + 1
+        });
+      }
+      renderSvg(zoneHost, 'strikeZone', {
+        title: 'Sequence — catcher’s view',
+        grid: 3,
+        pitches: plotted
+      });
+    }
+
+    function paintAvail() {
+      var list, i, p, btn;
+      list = availablePitches(current());
+      availBar.innerHTML = '';
+      for (i = 0; i < list.length; i++) {
+        p = list[i];
+        btn = el('button', {
+          type: 'button',
+          class: 'token',
+          text: pitchLabel(p)
+        });
+        btn.setAttribute('aria-label', 'Add ' + pitchLabel(p));
+        if (state.resolved || state.done || state.picked.length >= 3) btn.disabled = true;
+        (function (pitch) {
+          bindActivate(btn, function () {
+            if (state.resolved || state.done) return;
+            if (state.picked.length >= 3) return;
+            state.picked.push(pitch);
+            paintSeq();
+            paintAvail();
+            drawZone();
+          });
+        }(p));
+        availBar.appendChild(btn);
+      }
+    }
+
+    function paintSeq() {
+      var i, row, lab, rm, p;
+      seqBar.innerHTML = '';
+      for (i = 0; i < 3; i++) {
+        p = state.picked[i];
+        row = flex(el('div', { class: 'dropzone' }));
+        row.style.justifyContent = 'space-between';
+        row.style.width = '100%';
+        row.style.marginTop = '0.35rem';
+        lab = el('span', {
+          text: p ? String(i + 1) + '. ' + pitchLabel(p) : String(i + 1) + '. empty'
+        });
+        row.appendChild(lab);
+        if (p && !state.resolved && !state.done) {
+          rm = el('button', { type: 'button', class: 'btn btn-sm btn-ghost', text: 'Remove' });
+          rm.setAttribute('aria-label', 'Remove pitch ' + (i + 1));
+          (function (ix) {
+            bindActivate(rm, function () {
+              if (state.resolved || state.done) return;
+              state.picked.splice(ix, 1);
+              paintSeq();
+              paintAvail();
+              drawZone();
+            });
+          }(i));
+          row.appendChild(rm);
+        }
+        seqBar.appendChild(row);
+      }
+    }
+
+    function idealSentence(c) {
+      var ideal, i, bits;
+      ideal = idealList(c);
+      if (!ideal.length) return '';
+      bits = [];
+      for (i = 0; i < ideal.length; i++) bits.push(pitchLabel(ideal[i]));
+      return 'One good sequence is ' + bits.join(', then ') + '. More than one good sequence exists.';
+    }
+
+    function principlesOk(got, need) {
+      if (need.changedLevel && !got.changedLevel) return false;
+      if (need.changedSpeed && !got.changedSpeed) return false;
+      return true;
+    }
+
+    function feedbackLine(got, need, matchedIdeal) {
+      var bits = [];
+      bits.push(got.changedLevel ? 'You changed eye level.' : 'The sequence stayed at one eye level.');
+      bits.push(got.changedSpeed ? 'You changed speeds.' : 'The sequence stayed at one speed.');
+      if (need.changedLevel && !got.changedLevel) bits.push('This hitter asked you to change eye level.');
+      if (need.changedSpeed && !got.changedSpeed) bits.push('This hitter asked you to change speeds.');
+      if (!need.changedSpeed) bits.push('Staying with one speed can still be right when the scouting note says so.');
+      if (matchedIdeal) bits.push('That matches one ideal line.');
+      else bits.push('It does not have to match the ideal line exactly.');
+      return bits.join(' ');
+    }
+
+    function goNext() {
+      state.index += 1;
+      state.picked = [];
+      state.fails = 0;
+      state.resolved = false;
+      if (state.index >= cases.length) {
+        state.done = true;
+        ctx.status(container, 'Done. ' + state.correct + ' of ' + cases.length + ' sequences held the principles.', 'ok');
+        fireComplete(onComplete, state.correct, cases.length);
+        ctx.actions(container, [
+          { label: 'Check', kind: 'primary', disabled: true, onClick: function () {} },
+          { label: 'Reset', kind: 'ghost', onClick: doReset }
+        ]);
+        return;
+      }
+      paintAll();
+    }
+
+    function doCheck() {
+      var c, got, need, ok, matched, expl, line;
+      if (state.done) return;
+      if (state.resolved) {
+        goNext();
+        return;
+      }
+      c = current();
+      if (state.picked.length < 3) {
+        ctx.status(container, 'Pick three pitches first.', 'info');
+        return;
+      }
+      got = sequenceFlags(state.picked);
+      need = sequenceFlags(idealList(c).length ? idealList(c) : state.picked);
+      matched = sequencesMatch(state.picked, idealList(c));
+      ok = matched || principlesOk(got, need);
+      expl = trimStr(c.explain);
+      line = feedbackLine(got, need, matched);
+      if (ok) {
+        state.correct += 1;
+        state.resolved = true;
+        paintSeq();
+        paintAvail();
+        paintExplain(explainEl, expl + ' ' + line);
+        ctx.status(container, 'The principles hold. ' + expl, 'ok');
+        ctx.actions(container, [
+          { label: nextCaseLabel(state.index, cases.length), kind: 'primary', onClick: doCheck },
+          { label: 'Reset', kind: 'ghost', onClick: doReset }
+        ]);
+        return;
+      }
+      state.fails += 1;
+      if (state.fails >= 2) {
+        state.resolved = true;
+        paintSeq();
+        paintAvail();
+        paintExplain(explainEl, expl + ' ' + line + ' ' + idealSentence(c));
+        ctx.status(container, 'Look at a good sequence. ' + expl, 'wrong');
+        ctx.actions(container, [
+          { label: nextCaseLabel(state.index, cases.length), kind: 'primary', onClick: doCheck },
+          { label: 'Reset', kind: 'ghost', onClick: doReset }
+        ]);
+        return;
+      }
+      ctx.status(container, line + ' Adjust the sequence and check again.', 'wrong');
+    }
+
+    function doReset() {
+      state.index = 0;
+      state.picked = [];
+      state.fails = 0;
+      state.correct = 0;
+      state.resolved = false;
+      state.done = false;
+      paintAll();
+    }
+
+    function paintAll() {
+      var c = current();
+      headEl.innerHTML = esc(
+        'Hitter ' + (state.index + 1) + ' of ' + cases.length + '. ' + trimStr(c.hitter)
+      );
+      countEl.innerHTML = esc(c.count ? 'Count: ' + safeText(c.count) + '.' : '');
+      paintSeq();
+      paintAvail();
+      drawZone();
+      paintExplain(explainEl, '');
+      ctx.status(container, 'Add three pitches, then Check. Principles first, not an exact copy.', 'info');
+      ctx.actions(container, [
+        { label: 'Check', kind: 'primary', onClick: doCheck },
+        { label: 'Reset', kind: 'ghost', onClick: doReset }
+      ]);
+    }
+
+    paintAll();
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 13. scoreThePlay                                                    */
+  /* ------------------------------------------------------------------ */
+
+  function foldScore(s) {
+    var t;
+    t = trimStr(s);
+    t = t.replace(/backward[s]?\s*-?\s*k/ig, BACKWARDS_K);
+    t = t.replace(/k\s*-?\s*looking/ig, BACKWARDS_K);
+    t = t.replace(/\s+/g, '');
+    t = t.toUpperCase();
+    return t;
+  }
+
+  function scoreMatches(got, answer, accept) {
+    var g, i, list;
+    g = foldScore(got);
+    if (!g) return false;
+    if (g === foldScore(answer)) return true;
+    list = asList(accept);
+    for (i = 0; i < list.length; i++) {
+      if (g === foldScore(list[i])) return true;
+    }
+    return false;
+  }
+
+  function mountScoreThePlay(container, opts, onComplete, ctx) {
+    var cases, root, descEl, builtEl, typeInput, keysBar, extraBar, explainEl;
+    var state;
+    var KEYS, i;
+
+    opts = opts && typeof opts === 'object' ? opts : {};
+    cases = validCases(opts, 'cases');
+    if (!cases.length) {
+      setEmpty(container, 'This exercise is unavailable.', 'No scoring cases were provided.');
+      return;
+    }
+
+    KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'E', 'FC', 'K', BACKWARDS_K, 'F', 'U', '-'];
+
+    state = {
+      index: 0,
+      value: '',
+      fails: 0,
+      correct: 0,
+      resolved: false,
+      done: false
+    };
+
+    root = el('div');
+    fullWidth(root);
+    container.appendChild(root);
+    descEl = el('p');
+    root.appendChild(descEl);
+    root.appendChild(el('p', {
+      class: 'hint',
+      text: 'Build the notation with the keys, or type it. Case and spaces do not matter. ' +
+        BACKWARDS_K + ' is a called third strike.'
+    }));
+    builtEl = el('p');
+    builtEl.style.fontWeight = '700';
+    builtEl.style.fontSize = '1.25rem';
+    builtEl.setAttribute('aria-live', 'polite');
+    root.appendChild(builtEl);
+    typeInput = el('input', { type: 'text' });
+    typeInput.setAttribute('aria-label', 'Scorekeeping notation');
+    typeInput.setAttribute('autocomplete', 'off');
+    typeInput.setAttribute('spellcheck', 'false');
+    typeInput.style.width = '100%';
+    typeInput.style.minHeight = '44px';
+    typeInput.style.padding = '0.4rem 0.6rem';
+    typeInput.style.fontSize = '1rem';
+    root.appendChild(typeInput);
+    keysBar = flex(el('div'));
+    keysBar.style.marginTop = '0.5rem';
+    root.appendChild(keysBar);
+    extraBar = flex(el('div'));
+    extraBar.style.marginTop = '0.35rem';
+    root.appendChild(extraBar);
+    explainEl = el('div');
+    root.appendChild(explainEl);
+
+    typeInput.addEventListener('input', function () {
+      if (state.resolved || state.done) return;
+      state.value = typeInput.value;
+      paintBuilt();
+    });
+    typeInput.addEventListener('keydown', function (e) {
+      var k = e.key || e.keyCode;
+      if (k === 'Enter' || k === 13) {
+        e.preventDefault();
+        doCheck();
+      }
+    });
+
+    function current() {
+      return cases[state.index];
+    }
+
+    function paintBuilt() {
+      var shown = trimStr(state.value);
+      builtEl.innerHTML = esc(shown ? shown : '(empty)');
+      if (typeInput.value !== state.value) typeInput.value = state.value;
+    }
+
+    function appendToken(t) {
+      if (state.resolved || state.done) return;
+      state.value = safeText(state.value) + t;
+      paintBuilt();
+      typeInput.focus();
+    }
+
+    function paintKeys() {
+      var btn, lab;
+      keysBar.innerHTML = '';
+      extraBar.innerHTML = '';
+      for (i = 0; i < KEYS.length; i++) {
+        lab = KEYS[i] === BACKWARDS_K ? BACKWARDS_K + ' called K' : KEYS[i];
+        btn = el('button', { type: 'button', class: 'token', text: KEYS[i] });
+        btn.setAttribute('aria-label', 'Insert ' + lab);
+        if (state.resolved || state.done) btn.disabled = true;
+        (function (tok) {
+          bindActivate(btn, function () {
+            appendToken(tok);
+          });
+        }(KEYS[i]));
+        keysBar.appendChild(btn);
+      }
+      btn = el('button', { type: 'button', class: 'btn btn-sm btn-ghost', text: 'Delete last' });
+      btn.setAttribute('aria-label', 'Delete last token');
+      if (state.resolved || state.done) btn.disabled = true;
+      bindActivate(btn, function () {
+        var s, tokens, j, tok;
+        if (state.resolved || state.done) return;
+        s = safeText(state.value);
+        if (!s) return;
+        tokens = ['FC', BACKWARDS_K];
+        for (j = 0; j < tokens.length; j++) {
+          tok = tokens[j];
+          if (s.length >= tok.length && s.slice(s.length - tok.length) === tok) {
+            state.value = s.slice(0, s.length - tok.length);
+            paintBuilt();
+            return;
+          }
+        }
+        state.value = s.slice(0, s.length - 1);
+        paintBuilt();
+      });
+      extraBar.appendChild(btn);
+    }
+
+    function goNext() {
+      state.index += 1;
+      state.value = '';
+      state.fails = 0;
+      state.resolved = false;
+      if (state.index >= cases.length) {
+        state.done = true;
+        ctx.status(container, 'Done. ' + state.correct + ' of ' + cases.length + ' scored correctly.', 'ok');
+        fireComplete(onComplete, state.correct, cases.length);
+        ctx.actions(container, [
+          { label: 'Check', kind: 'primary', disabled: true, onClick: function () {} },
+          { label: 'Reset', kind: 'ghost', onClick: doReset }
+        ]);
+        return;
+      }
+      paintAll();
+    }
+
+    function doCheck() {
+      var c, expl, ok;
+      if (state.done) return;
+      if (state.resolved) {
+        goNext();
+        return;
+      }
+      c = current();
+      if (!trimStr(state.value)) {
+        ctx.status(container, 'Enter a notation first.', 'info');
+        return;
+      }
+      expl = trimStr(c.explain);
+      ok = scoreMatches(state.value, c.answer, c.accept);
+      if (ok) {
+        state.correct += 1;
+        state.resolved = true;
+        paintKeys();
+        typeInput.disabled = true;
+        paintExplain(explainEl, expl);
+        ctx.status(container, 'Correct. ' + expl, 'ok');
+        ctx.actions(container, [
+          { label: nextCaseLabel(state.index, cases.length), kind: 'primary', onClick: doCheck },
+          { label: 'Reset', kind: 'ghost', onClick: doReset }
+        ]);
+        return;
+      }
+      state.fails += 1;
+      if (state.fails >= 2) {
+        state.resolved = true;
+        state.value = safeText(c.answer);
+        paintBuilt();
+        paintKeys();
+        typeInput.disabled = true;
+        paintExplain(explainEl, expl);
+        ctx.status(container, 'The book is ' + safeText(c.answer) + '. ' + expl, 'wrong');
+        ctx.actions(container, [
+          { label: nextCaseLabel(state.index, cases.length), kind: 'primary', onClick: doCheck },
+          { label: 'Reset', kind: 'ghost', onClick: doReset }
+        ]);
+        return;
+      }
+      ctx.status(container, 'Not that notation. Check the fielders in order, then try once more.', 'wrong');
+    }
+
+    function doReset() {
+      state.index = 0;
+      state.value = '';
+      state.fails = 0;
+      state.correct = 0;
+      state.resolved = false;
+      state.done = false;
+      typeInput.disabled = false;
+      paintAll();
+    }
+
+    function paintAll() {
+      var c = current();
+      descEl.innerHTML = esc(
+        'Play ' + (state.index + 1) + ' of ' + cases.length + '. ' +
+        trimStr(c.description || promptOrSituation(c))
+      );
+      typeInput.disabled = false;
+      paintBuilt();
+      paintKeys();
+      paintExplain(explainEl, '');
+      ctx.status(container, 'Build or type the notation, then Check.', 'info');
+      ctx.actions(container, [
+        { label: 'Check', kind: 'primary', onClick: doCheck },
+        { label: 'Reset', kind: 'ghost', onClick: doReset }
+      ]);
+    }
+
+    paintAll();
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 14. statMatch                                                       */
+  /* ------------------------------------------------------------------ */
+
+  function mountStatMatch(container, opts, onComplete, ctx) {
+    var pairs, traps, root, cols, leftCol, rightCol, hidesEl, explainEl;
+    var state, i, p;
+
+    opts = opts && typeof opts === 'object' ? opts : {};
+    pairs = [];
+    if (opts && isArray(opts.pairs)) {
+      for (i = 0; i < opts.pairs.length; i++) {
+        p = opts.pairs[i];
+        if (p && typeof p === 'object' && trimStr(p.stat) && trimStr(p.question)) {
+          pairs.push(p);
+        }
+      }
+    }
+    traps = [];
+    if (opts && isArray(opts.traps)) {
+      for (i = 0; i < opts.traps.length; i++) {
+        p = opts.traps[i];
+        if (p && typeof p === 'object' && trimStr(p.question)) traps.push(p);
+      }
+    }
+    if (!pairs.length) {
+      setEmpty(container, 'This exercise is unavailable.', 'No statistic pairs were provided.');
+      return;
+    }
+
+    state = {
+      selectedStat: null,
+      selectedQuestion: null,
+      matched: {},
+      fails: 0,
+      done: false,
+      revealed: false
+    };
+
+    root = el('div');
+    fullWidth(root);
+    container.appendChild(root);
+    root.appendChild(el('p', {
+      class: 'hint',
+      text: 'Select a statistic, then the question it actually answers. Wrong matches explain the misreading. After a correct match, read what the number hides — that is the point.'
+    }));
+    cols = flex(el('div'));
+    cols.style.alignItems = 'flex-start';
+    leftCol = columnStack(el('div'));
+    leftCol.style.flex = '1 1 12rem';
+    rightCol = columnStack(el('div'));
+    rightCol.style.flex = '1 1 18rem';
+    cols.appendChild(leftCol);
+    cols.appendChild(rightCol);
+    root.appendChild(cols);
+    hidesEl = el('div');
+    root.appendChild(hidesEl);
+    explainEl = el('div');
+    root.appendChild(explainEl);
+
+    function pairForStat(stat) {
+      var j;
+      for (j = 0; j < pairs.length; j++) {
+        if (pairs[j].stat === stat) return pairs[j];
+      }
+      return null;
+    }
+
+    function pairForQuestion(q) {
+      var j;
+      for (j = 0; j < pairs.length; j++) {
+        if (pairs[j].question === q) return pairs[j];
+      }
+      return null;
+    }
+
+    function trapForQuestion(q) {
+      var j;
+      for (j = 0; j < traps.length; j++) {
+        if (traps[j].question === q) return traps[j];
+      }
+      return null;
+    }
+
+    function matchedCount() {
+      var j, n;
+      n = 0;
+      for (j = 0; j < pairs.length; j++) {
+        if (state.matched[pairs[j].stat]) n += 1;
+      }
+      return n;
+    }
+
+    function questionUsed(q) {
+      var k;
+      for (k in state.matched) {
+        if (hasOwn(state.matched, k) && state.matched[k] === q) return true;
+      }
+      return false;
+    }
+
+    function finishIfDone() {
+      if (matchedCount() < pairs.length) return;
+      if (state.done) return;
+      state.done = true;
+      ctx.status(
+        container,
+        'All ' + pairs.length + ' statistics matched. Read what each number hides.',
+        'ok'
+      );
+      fireComplete(onComplete, pairs.length, pairs.length);
+      ctx.actions(container, [
+        { label: 'Check', kind: 'primary', disabled: true, onClick: function () {} },
+        { label: 'Reset', kind: 'ghost', onClick: doReset }
+      ]);
+    }
+
+    function tryPair() {
+      var pair, trap, stat, q;
+      stat = state.selectedStat;
+      q = state.selectedQuestion;
+      if (!stat || !q || state.done) return;
+      pair = pairForStat(stat);
+      if (pair && pair.question === q) {
+        state.matched[stat] = q;
+        state.selectedStat = null;
+        state.selectedQuestion = null;
+        paintExplain(hidesEl, pair.stat + ' hides: ' + trimStr(pair.hides));
+        paintExplain(explainEl, '');
+        paintCols();
+        ctx.status(
+          container,
+          'Matched ' + pair.stat + '. ' + matchedCount() + ' of ' + pairs.length + '. What it hides is the point.',
+          'ok'
+        );
+        finishIfDone();
+        return;
+      }
+      trap = trapForQuestion(q);
+      state.fails += 1;
+      state.selectedStat = null;
+      state.selectedQuestion = null;
+      paintCols();
+      if (trap) {
+        paintExplain(explainEl, trimStr(trap.explain));
+        ctx.status(container, 'Trap. ' + trimStr(trap.explain), 'wrong');
+      } else {
+        paintExplain(explainEl, safeText(stat) + ' does not answer that question.');
+        ctx.status(container, 'Not that pairing. Read what the number actually counts.', 'wrong');
+      }
+    }
+
+    function paintCols() {
+      var stats, questions, j, qList, btn, st, q, used, matchedQ, pair;
+      leftCol.innerHTML = '';
+      rightCol.innerHTML = '';
+      leftCol.appendChild(el('p', { class: 'hint', text: 'Statistics' }));
+      rightCol.appendChild(el('p', { class: 'hint', text: 'Questions' }));
+      stats = [];
+      for (j = 0; j < pairs.length; j++) stats.push(pairs[j].stat);
+      if (!state._statOrder) state._statOrder = ctx.shuffle(stats);
+      else {
+        /* keep order */
+      }
+      qList = [];
+      for (j = 0; j < pairs.length; j++) qList.push(pairs[j].question);
+      for (j = 0; j < traps.length; j++) qList.push(traps[j].question);
+      if (!state._qOrder) state._qOrder = ctx.shuffle(qList);
+
+      for (j = 0; j < state._statOrder.length; j++) {
+        st = state._statOrder[j];
+        used = !!state.matched[st];
+        btn = el('button', {
+          type: 'button',
+          class: 'choice-btn' +
+            (state.selectedStat === st ? ' selected' : '') +
+            (used ? ' correct' : ''),
+          text: st
+        });
+        setPressed(btn, state.selectedStat === st || used);
+        if (used || state.done || state.revealed) btn.disabled = true;
+        (function (id) {
+          bindActivate(btn, function () {
+            if (state.done || state.revealed || state.matched[id]) return;
+            state.selectedStat = state.selectedStat === id ? null : id;
+            paintCols();
+            if (state.selectedStat && state.selectedQuestion) tryPair();
+          });
+        }(st));
+        leftCol.appendChild(btn);
+      }
+
+      for (j = 0; j < state._qOrder.length; j++) {
+        q = state._qOrder[j];
+        used = questionUsed(q);
+        pair = pairForQuestion(q);
+        matchedQ = used;
+        btn = el('button', {
+          type: 'button',
+          class: 'choice-btn' +
+            (state.selectedQuestion === q ? ' selected' : '') +
+            (matchedQ ? ' correct' : ''),
+          text: q
+        });
+        setPressed(btn, state.selectedQuestion === q || matchedQ);
+        if (used || state.done || state.revealed) btn.disabled = true;
+        (function (text) {
+          bindActivate(btn, function () {
+            if (state.done || state.revealed || questionUsed(text)) return;
+            state.selectedQuestion = state.selectedQuestion === text ? null : text;
+            paintCols();
+            if (state.selectedStat && state.selectedQuestion) tryPair();
+          });
+        }(q));
+        rightCol.appendChild(btn);
+      }
+    }
+
+    function revealRemaining() {
+      var j, pair, n;
+      n = matchedCount();
+      for (j = 0; j < pairs.length; j++) {
+        pair = pairs[j];
+        if (!state.matched[pair.stat]) state.matched[pair.stat] = pair.question;
+      }
+      state.revealed = true;
+      state.done = true;
+      paintCols();
+      paintExplain(hidesEl, 'Remaining matches shown. Each hide line is the point of the number.');
+      ctx.status(
+        container,
+        'Revealed. You had matched ' + n + ' of ' + pairs.length + ' before the reveal.',
+        'wrong'
+      );
+      fireComplete(onComplete, n, pairs.length);
+      ctx.actions(container, [
+        { label: 'Check', kind: 'primary', disabled: true, onClick: function () {} },
+        { label: 'Reset', kind: 'ghost', onClick: doReset }
+      ]);
+    }
+
+    function doCheck() {
+      var n;
+      if (state.done) return;
+      n = matchedCount();
+      if (n === pairs.length) {
+        finishIfDone();
+        return;
+      }
+      state.fails += 1;
+      if (state.fails >= 2) {
+        revealRemaining();
+        return;
+      }
+      ctx.status(
+        container,
+        n + ' of ' + pairs.length + ' matched. Pair the rest, or Check again to see them.',
+        'info'
+      );
+    }
+
+    function doReset() {
+      state.selectedStat = null;
+      state.selectedQuestion = null;
+      state.matched = {};
+      state.fails = 0;
+      state.done = false;
+      state.revealed = false;
+      state._statOrder = null;
+      state._qOrder = null;
+      paintExplain(hidesEl, '');
+      paintExplain(explainEl, '');
+      paintCols();
+      ctx.status(container, 'Select a statistic, then the question it answers.', 'info');
+      ctx.actions(container, [
+        { label: 'Check', kind: 'primary', onClick: doCheck },
+        { label: 'Reset', kind: 'ghost', onClick: doReset }
+      ]);
+    }
+
+    paintCols();
+    ctx.status(container, 'Select a statistic, then the question it answers.', 'info');
+    ctx.actions(container, [
+      { label: 'Check', kind: 'primary', onClick: doCheck },
+      { label: 'Reset', kind: 'ghost', onClick: doReset }
+    ]);
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 15. gradeTheTool                                                    */
+  /* ------------------------------------------------------------------ */
+
+  function clampGrade(n) {
+    var v = Number(n);
+    if (v !== v) v = 50;
+    v = Math.round(v / 5) * 5;
+    if (v < 20) v = 20;
+    if (v > 80) v = 80;
+    return v;
+  }
+
+  function mountGradeTheTool(container, opts, onComplete, ctx) {
+    var cases, root, toolEl, descEl, gaugeHost, ctrlBar, valueEl, explainEl, noteEl;
+    var state, rangeEl;
+
+    opts = opts && typeof opts === 'object' ? opts : {};
+    cases = validCases(opts, 'cases');
+    if (!cases.length) {
+      setEmpty(container, 'This exercise is unavailable.', 'No tool grades were provided.');
+      return;
+    }
+
+    state = {
+      index: 0,
+      value: 50,
+      fails: 0,
+      correct: 0,
+      resolved: false,
+      done: false
+    };
+
+    root = el('div');
+    fullWidth(root);
+    container.appendChild(root);
+    toolEl = el('p');
+    toolEl.style.fontWeight = '700';
+    root.appendChild(toolEl);
+    descEl = el('p');
+    root.appendChild(descEl);
+    noteEl = el('p', {
+      class: 'hint',
+      text: '50 is major-league average, not “average person” and not average for this age group. Each 10 points is about one standard deviation. Step by 5.'
+    });
+    root.appendChild(noteEl);
+    gaugeHost = el('div');
+    root.appendChild(gaugeHost);
+    ctrlBar = flex(el('div'));
+    root.appendChild(ctrlBar);
+    valueEl = el('p', { class: 'hint' });
+    root.appendChild(valueEl);
+    explainEl = el('div');
+    root.appendChild(explainEl);
+
+    function current() {
+      return cases[state.index];
+    }
+
+    function expectedGrade(c) {
+      var g = Number(c && c.grade);
+      if (g !== g) return 50;
+      return g;
+    }
+
+    function toleranceOf(c) {
+      var t = Number(c && c.tolerance);
+      if (t !== t || t < 0) return 5;
+      return t;
+    }
+
+    function drawGauge(compare) {
+      var c = current();
+      var optsG = {
+        value: state.value,
+        label: trimStr(c.tool) || 'Tool',
+        title: '20–80 scouting scale'
+      };
+      if (typeof compare === 'number') optsG.compare = compare;
+      renderSvg(gaugeHost, 'scaleGauge', optsG);
+    }
+
+    function paintControls() {
+      var minus, plus, lab;
+      ctrlBar.innerHTML = '';
+      minus = el('button', { type: 'button', class: 'btn btn-sm btn-ghost', text: '−5' });
+      minus.setAttribute('aria-label', 'Lower grade by 5');
+      plus = el('button', { type: 'button', class: 'btn btn-sm btn-ghost', text: '+5' });
+      plus.setAttribute('aria-label', 'Raise grade by 5');
+      if (state.resolved || state.done) {
+        minus.disabled = true;
+        plus.disabled = true;
+      }
+      bindActivate(minus, function () {
+        if (state.resolved || state.done) return;
+        state.value = clampGrade(state.value - 5);
+        syncRange();
+        drawGauge();
+        paintValue();
+      });
+      bindActivate(plus, function () {
+        if (state.resolved || state.done) return;
+        state.value = clampGrade(state.value + 5);
+        syncRange();
+        drawGauge();
+        paintValue();
+      });
+      rangeEl = el('input', { type: 'range' });
+      rangeEl.min = '20';
+      rangeEl.max = '80';
+      rangeEl.step = '5';
+      rangeEl.value = String(state.value);
+      rangeEl.setAttribute('aria-label', '20 to 80 scouting grade');
+      rangeEl.style.flex = '1 1 12rem';
+      rangeEl.style.minHeight = '44px';
+      if (state.resolved || state.done) rangeEl.disabled = true;
+      rangeEl.addEventListener('input', function () {
+        if (state.resolved || state.done) return;
+        state.value = clampGrade(rangeEl.value);
+        drawGauge();
+        paintValue();
+      });
+      lab = el('span', { text: String(state.value) });
+      lab.style.fontWeight = '700';
+      lab.style.minWidth = '2.5rem';
+      ctrlBar.appendChild(minus);
+      ctrlBar.appendChild(rangeEl);
+      ctrlBar.appendChild(plus);
+    }
+
+    function syncRange() {
+      if (rangeEl) rangeEl.value = String(state.value);
+    }
+
+    function paintValue() {
+      valueEl.innerHTML = esc('Current grade: ' + state.value + '. 50 = MLB average.');
+    }
+
+    function goNext() {
+      state.index += 1;
+      state.value = 50;
+      state.fails = 0;
+      state.resolved = false;
+      if (state.index >= cases.length) {
+        state.done = true;
+        ctx.status(container, 'Done. ' + state.correct + ' of ' + cases.length + ' grades within tolerance.', 'ok');
+        fireComplete(onComplete, state.correct, cases.length);
+        ctx.actions(container, [
+          { label: 'Check', kind: 'primary', disabled: true, onClick: function () {} },
+          { label: 'Reset', kind: 'ghost', onClick: doReset }
+        ]);
+        return;
+      }
+      paintAll();
+    }
+
+    function doCheck() {
+      var c, exp, tol, diff, expl;
+      if (state.done) return;
+      if (state.resolved) {
+        goNext();
+        return;
+      }
+      c = current();
+      exp = expectedGrade(c);
+      tol = toleranceOf(c);
+      diff = Math.abs(state.value - exp);
+      expl = trimStr(c.explain);
+      if (diff <= tol) {
+        state.correct += 1;
+        state.resolved = true;
+        paintControls();
+        drawGauge(exp);
+        paintExplain(explainEl, expl);
+        ctx.status(
+          container,
+          'Within ' + tol + ' of ' + exp + '. ' + expl,
+          'ok'
+        );
+        ctx.actions(container, [
+          { label: nextCaseLabel(state.index, cases.length), kind: 'primary', onClick: doCheck },
+          { label: 'Reset', kind: 'ghost', onClick: doReset }
+        ]);
+        return;
+      }
+      state.fails += 1;
+      if (state.fails >= 2) {
+        state.resolved = true;
+        state.value = clampGrade(exp);
+        paintControls();
+        paintValue();
+        drawGauge(exp);
+        paintExplain(explainEl, expl);
+        ctx.status(container, 'The grade is ' + exp + '. ' + expl, 'wrong');
+        ctx.actions(container, [
+          { label: nextCaseLabel(state.index, cases.length), kind: 'primary', onClick: doCheck },
+          { label: 'Reset', kind: 'ghost', onClick: doReset }
+        ]);
+        return;
+      }
+      ctx.status(
+        container,
+        'Off by ' + diff + '. 50 is major-league average. Try a step of 5 either way.',
+        'wrong'
+      );
+    }
+
+    function doReset() {
+      state.index = 0;
+      state.value = 50;
+      state.fails = 0;
+      state.correct = 0;
+      state.resolved = false;
+      state.done = false;
+      paintAll();
+    }
+
+    function paintAll() {
+      var c = current();
+      toolEl.innerHTML = esc(
+        'Tool ' + (state.index + 1) + ' of ' + cases.length + '. ' + trimStr(c.tool)
+      );
+      descEl.innerHTML = esc(trimStr(c.description || promptOrSituation(c)));
+      paintControls();
+      paintValue();
+      drawGauge();
+      paintExplain(explainEl, '');
+      ctx.status(container, 'Place the tool on the 20–80 scale, then Check.', 'info');
+      ctx.actions(container, [
+        { label: 'Check', kind: 'primary', onClick: doCheck },
+        { label: 'Reset', kind: 'ghost', onClick: doReset }
+      ]);
+    }
+
+    paintAll();
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 16. spotTheAlignment                                                */
+  /* ------------------------------------------------------------------ */
+
+  function alignmentOptions(c) {
+    var raw, i, out, id;
+    raw = c && isArray(c.options) ? c.options : [];
+    out = [];
+    for (i = 0; i < raw.length; i++) {
+      id = alignmentId(raw[i]);
+      if (id) out.push(id);
+    }
+    return out;
+  }
+
+  function mountSpotTheAlignment(container, opts, onComplete, ctx) {
+    var cases, root, sitEl, choiceBar, explainEl;
+    var state;
+
+    opts = opts && typeof opts === 'object' ? opts : {};
+    cases = validCases(opts, 'cases');
+    if (!cases.length) {
+      setEmpty(container, 'This exercise is unavailable.', 'No alignment cases were provided.');
+      return;
+    }
+
+    state = {
+      index: 0,
+      picked: null,
+      fails: 0,
+      correct: 0,
+      resolved: false,
+      done: false
+    };
+
+    root = el('div');
+    fullWidth(root);
+    container.appendChild(root);
+    sitEl = el('p');
+    root.appendChild(sitEl);
+    root.appendChild(el('p', {
+      class: 'hint',
+      text: 'Pick the alignment that matches the score, the inning, the outs, and the runners. The loudest shout from the dugout is sometimes wrong.'
+    }));
+    choiceBar = el('div');
+    root.appendChild(choiceBar);
+    explainEl = el('div');
+    root.appendChild(explainEl);
+
+    function current() {
+      return cases[state.index];
+    }
+
+    function expected(c) {
+      var optsA, idx;
+      optsA = alignmentOptions(c);
+      idx = resolveAnswerIndex(c.answer, c.options);
+      if (idx >= 0 && c.options[idx] != null) return alignmentId(c.options[idx]);
+      if (idx >= 0 && optsA[idx]) return optsA[idx];
+      return alignmentId(c.answer);
+    }
+
+    function usePreview(c) {
+      return !!(c && c.preview);
+    }
+
+    function paintChoices() {
+      var c, optsA, i, id, btn, exp, isPicked, isRight, mini, preview;
+      c = current();
+      optsA = alignmentOptions(c);
+      preview = usePreview(c);
+      exp = expected(c);
+      choiceBar.innerHTML = '';
+      if (preview) {
+        choiceBar.style.display = 'flex';
+        choiceBar.style.flexWrap = 'wrap';
+        choiceBar.style.gap = '0.5rem';
+      } else {
+        columnStack(choiceBar);
+      }
+      for (i = 0; i < optsA.length; i++) {
+        id = optsA[i];
+        isPicked = state.picked === id;
+        isRight = id === exp;
+        btn = el('button', { type: 'button' });
+        btn.className = 'choice-btn' +
+          (isPicked ? ' selected' : '') +
+          (state.resolved && isRight ? ' correct' : '') +
+          (isPicked && !isRight && state.fails ? ' wrong' : '');
+        btn.setAttribute('aria-label', alignmentLabel(id));
+        setPressed(btn, isPicked);
+        if (preview) {
+          btn.style.flex = '1 1 12rem';
+          btn.style.flexDirection = 'column';
+          btn.style.alignItems = 'stretch';
+          mini = el('div');
+          mini.style.pointerEvents = 'none';
+          mini.style.width = '100%';
+          btn.appendChild(el('span', { text: alignmentLabel(id) }));
+          btn.appendChild(mini);
+          renderSvg(mini, 'field', {
+            positions: true,
+            alignment: id,
+            width: 220,
+            title: alignmentLabel(id)
+          });
+        } else {
+          btn.appendChild(document.createTextNode(alignmentLabel(id)));
+        }
+        if (state.resolved || state.done) btn.disabled = true;
+        (function (choice) {
+          bindActivate(btn, function () {
+            if (state.resolved || state.done) return;
+            state.picked = choice;
+            paintChoices();
+          });
+        }(id));
+        choiceBar.appendChild(btn);
+      }
+    }
+
+    function goNext() {
+      state.index += 1;
+      state.picked = null;
+      state.fails = 0;
+      state.resolved = false;
+      if (state.index >= cases.length) {
+        state.done = true;
+        ctx.status(container, 'Done. ' + state.correct + ' of ' + cases.length + ' alignments correct.', 'ok');
+        fireComplete(onComplete, state.correct, cases.length);
+        ctx.actions(container, [
+          { label: 'Check', kind: 'primary', disabled: true, onClick: function () {} },
+          { label: 'Reset', kind: 'ghost', onClick: doReset }
+        ]);
+        return;
+      }
+      paintAll();
+    }
+
+    function doCheck() {
+      var c, exp, expl;
+      if (state.done) return;
+      if (state.resolved) {
+        goNext();
+        return;
+      }
+      c = current();
+      if (!state.picked) {
+        ctx.status(container, 'Pick an alignment first.', 'info');
+        return;
+      }
+      exp = expected(c);
+      expl = trimStr(c.explain);
+      if (state.picked === exp) {
+        state.correct += 1;
+        state.resolved = true;
+        paintChoices();
+        paintExplain(explainEl, expl);
+        ctx.status(container, 'Correct. ' + expl, 'ok');
+        ctx.actions(container, [
+          { label: nextCaseLabel(state.index, cases.length), kind: 'primary', onClick: doCheck },
+          { label: 'Reset', kind: 'ghost', onClick: doReset }
+        ]);
+        return;
+      }
+      state.fails += 1;
+      paintChoices();
+      if (state.fails >= 2) {
+        state.resolved = true;
+        paintChoices();
+        paintExplain(explainEl, expl);
+        ctx.status(container, 'The look is ' + alignmentLabel(exp) + '. ' + expl, 'wrong');
+        ctx.actions(container, [
+          { label: nextCaseLabel(state.index, cases.length), kind: 'primary', onClick: doCheck },
+          { label: 'Reset', kind: 'ghost', onClick: doReset }
+        ]);
+        return;
+      }
+      ctx.status(container, 'Not that look. The obvious shout is sometimes the wrong one.', 'wrong');
+    }
+
+    function doReset() {
+      state.index = 0;
+      state.picked = null;
+      state.fails = 0;
+      state.correct = 0;
+      state.resolved = false;
+      state.done = false;
+      paintAll();
+    }
+
+    function paintAll() {
+      var c = current();
+      sitEl.innerHTML = esc(
+        'Situation ' + (state.index + 1) + ' of ' + cases.length + '. ' +
+        trimStr(c.situation || promptOrSituation(c))
+      );
+      paintChoices();
+      paintExplain(explainEl, '');
+      ctx.status(container, 'Pick the alignment, then Check.', 'info');
+      ctx.actions(container, [
+        { label: 'Check', kind: 'primary', onClick: doCheck },
+        { label: 'Reset', kind: 'ghost', onClick: doReset }
+      ]);
+    }
+
+    paintAll();
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Register sixteen widgets                                            */
   /* ------------------------------------------------------------------ */
 
   register('labelTheField', { mount: mountLabelTheField });
@@ -2708,6 +5025,14 @@ window.HRL_INTERACTIVE = (function () {
   register('runnerAdvance', { mount: mountRunnerAdvance });
   register('swingOrder', { mount: mountSwingOrder });
   register('armCareCheck', { mount: mountArmCareCheck });
+  register('assignTheNine', { mount: mountAssignTheNine });
+  register('stealRead', { mount: mountStealRead });
+  register('makeTheCall', { mount: mountMakeTheCall });
+  register('sequencePitches', { mount: mountSequencePitches });
+  register('scoreThePlay', { mount: mountScoreThePlay });
+  register('statMatch', { mount: mountStatMatch });
+  register('gradeTheTool', { mount: mountGradeTheTool });
+  register('spotTheAlignment', { mount: mountSpotTheAlignment });
 
   return {
     widgets: widgets,
