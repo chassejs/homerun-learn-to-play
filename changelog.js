@@ -13,14 +13,16 @@ window.HRL_CHANGELOG = (function () {
       version: '1.0',
       date: '2026-08-19',
       type: 'major',
-      title: 'First release — split from Homerun Lineup',
+      title: 'First release',
       highlights: [
-        'The Practice Planner is now its own app, split out of Homerun Lineup v2.2 so it can grow independently.',
-        'Browse a searchable library of 368 drills sourced from the Youth Baseball Canada knowledge base.',
-        'Build a timed practice plan — Sequential drills or multi-station mode — with a live time budget bar.',
-        'Skill-focused pre-built plans you can load with one click.',
-        'Save plans to this browser, print a clean practice sheet, and export/import your saved plans as a JSON file.',
-        'Send feedback straight from the app, and get notified in-app when a new version is published.'
+        'Twenty-four chapters across six tiers, from never-watched-a-game to scouting and analytics.',
+        'A short placement quiz recommends where to start — and every chapter stays unlocked either way.',
+        'Diagrams and sixteen hands-on exercises built into the lessons, all keyboard-operable.',
+        'A quiz after every chapter, with a 75% pass mark and best-score tracking.',
+        'Missed questions return automatically on a spaced-repetition schedule until they stick.',
+        'An adaptive Baseball IQ test scored on a 40–160 scale, with a per-topic breakdown.',
+        'A 205-term glossary, searchable and linked from the lessons.',
+        'Everything works offline and stays in this browser; export and import your progress as a JSON file.'
       ]
     }
   ];
