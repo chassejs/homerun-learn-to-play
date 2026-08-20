@@ -477,7 +477,7 @@
       choices: [
         'True talent. Thirty at-bats is plenty to know.',
         'Weather. The interval around that number is enormous. One week of bleeders or lined-out hard contact will move it a hundred points. Publishing it as a skill is a category error.',
-        'The same thing as a plus future hit tool on the 20-80 scale.',
+        'Proof of a true .400 hitter you can project from, because batting average becomes skill in a handful of official at-bats.',
         'Proof the player should specialize in baseball immediately.'
       ],
       answer: 1,
@@ -870,7 +870,7 @@
       ],
       answer: 1,
       explain: 'Missing a base is an appeal play. The umpire may have seen it and will still wait. Live-ball appeal is a tag of the runner or of the missed base with the appeal stated; dead-ball appeal is time plus a verbal appeal at the base. There is no delayed gift and no duty on the offence to confess.',
-      source: 'tagging-up-and-reads'
+      source: ''
     },
     {
       id: 'q2402',
