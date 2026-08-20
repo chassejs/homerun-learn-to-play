@@ -212,6 +212,25 @@ window.HRL_SHELL = (function () {
     } catch (e) {}
   }
 
+  function setViewHeading(viewName, headingText, hideHint) {
+    var viewEl;
+    var heading;
+    var hint;
+    if (typeof document === 'undefined' || !document) return;
+    if (viewName == null || viewName === '') return;
+    if (typeof document.getElementById !== 'function') return;
+    viewEl = document.getElementById('view-' + viewName);
+    if (!viewEl) return;
+    heading = typeof viewEl.querySelector === 'function' ? viewEl.querySelector('h2') : null;
+    if (heading && typeof headingText === 'string' && headingText) {
+      heading.textContent = headingText;
+    }
+    hint = typeof viewEl.querySelector === 'function' ? viewEl.querySelector('p.hint') : null;
+    if (hint) {
+      hint.hidden = !!hideHint;
+    }
+  }
+
   function scrollTop() {
     try {
       if (typeof window.scrollTo === 'function') window.scrollTo(0, 0);
@@ -924,6 +943,7 @@ window.HRL_SHELL = (function () {
     on: on,
     off: off,
     renderHome: renderHome,
-    renderSettings: renderSettings
+    renderSettings: renderSettings,
+    setViewHeading: setViewHeading
   };
 }());

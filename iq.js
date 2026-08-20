@@ -494,6 +494,13 @@
     return document.getElementById('iq-root');
   }
 
+  function setViewHeading(hideHint) {
+    var sh = getNs('HRL_SHELL');
+    if (sh && typeof sh.setViewHeading === 'function') {
+      sh.setViewHeading('iq', null, hideHint);
+    }
+  }
+
   function moveOrder(idx, dir) {
     var arr;
     var j;
@@ -566,6 +573,7 @@
     if (!test) return;
     host = hostEl();
     if (!host) return;
+    setViewHeading(true);
     q = test.current;
     if (!q) {
       finishTest();
@@ -830,6 +838,7 @@
     if (!test) return;
     host = hostEl();
     if (!host) return;
+    setViewHeading(true);
     bbiq = computeBbiq(test.presented);
     band = bandFor(bbiq);
     byTopic = topicBreakdown(test.presented);
@@ -958,6 +967,7 @@
     if (!hasDocument()) return;
     host = hostEl();
     if (!host) return;
+    setViewHeading(true);
     host.innerHTML = '';
     P = getNs('HRL_PROGRESS');
     timerOn = timerEnabled();
@@ -1052,6 +1062,7 @@
     if (!hasDocument()) return;
     host = hostEl();
     if (!host) return;
+    setViewHeading(true);
     test = {
       difficulty: START_DIFFICULTY,
       usedIds: [],

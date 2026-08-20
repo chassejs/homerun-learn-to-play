@@ -149,6 +149,13 @@ window.HRL_LEARN = (function () {
     return window.HRL_SHELL || null;
   }
 
+  function setViewHeading(viewName, headingText, hideHint) {
+    var S = shell();
+    if (S && typeof S.setViewHeading === 'function') {
+      S.setViewHeading(viewName, headingText, hideHint);
+    }
+  }
+
   function allTiers() {
     var cur = curriculum();
     if (!cur || !isArray(cur.tiers)) return [];
@@ -556,6 +563,7 @@ window.HRL_LEARN = (function () {
     if (!hasDoc()) return;
     rootEl = document.getElementById('path-root');
     if (!rootEl) return;
+    setViewHeading('path', null, false);
     rootEl.innerHTML = '';
 
     tiers = allTiers();
@@ -968,7 +976,7 @@ window.HRL_LEARN = (function () {
   function appendHeading(parent, heading) {
     var t = safeText(heading);
     if (!t) return;
-    parent.appendChild(el('h4', { class: 'section-heading', text: t }));
+    parent.appendChild(el('h3', { class: 'section-heading', text: t }));
   }
 
   function appendParas(parent, body, pClass) {
@@ -1069,7 +1077,7 @@ window.HRL_LEARN = (function () {
   function renderExample(section, idx) {
     var wrap = sectionWrap(idx, 'example');
     var box = el('div', { class: 'example-box' });
-    if (safeText(section.heading)) box.appendChild(el('h4', { text: safeText(section.heading) }));
+    if (safeText(section.heading)) box.appendChild(el('h3', { text: safeText(section.heading) }));
     appendParas(box, section.body);
     wrap.appendChild(box);
     return wrap;
@@ -1078,7 +1086,7 @@ window.HRL_LEARN = (function () {
   function renderCoachnote(section, idx) {
     var wrap = sectionWrap(idx, 'coachnote');
     var box = el('div', { class: 'coachnote' });
-    if (safeText(section.heading)) box.appendChild(el('h4', { text: safeText(section.heading) }));
+    if (safeText(section.heading)) box.appendChild(el('h3', { text: safeText(section.heading) }));
     appendParas(box, section.body);
     wrap.appendChild(box);
     return wrap;
@@ -1239,7 +1247,9 @@ window.HRL_LEARN = (function () {
     return null;
   }
 
-  function focusChapterTitle(titleEl) {
+  function focusChapterTitle() {
+    var viewEl;
+    var titleEl;
     function go() {
       if (!titleEl) return;
       try { titleEl.focus(); } catch (e) {}
@@ -1251,6 +1261,12 @@ window.HRL_LEARN = (function () {
         }
       } catch (e2) {}
     }
+    if (!hasDoc()) return;
+    viewEl = document.getElementById('view-chapter');
+    titleEl = viewEl && typeof viewEl.querySelector === 'function'
+      ? viewEl.querySelector('h2')
+      : null;
+    if (!titleEl) return;
     titleEl.setAttribute('tabindex', '-1');
     if (typeof window.setTimeout === 'function') setTimeout(go, 0);
     else go();
@@ -1258,7 +1274,7 @@ window.HRL_LEARN = (function () {
 
   function renderChapter(chapterId) {
     var rootEl, ch, tier, rec, P, S;
-    var header, copy, hero, kicker, titleEl, subEl;
+    var header, copy, hero, kicker, subEl;
     var objWrap, objLead, objList, i, objText;
     var progressWrap, barObj, sectionsHost, node, rendered;
     var sections, cta, quizBtn, scorePill, nav, prevBtn, nextBtn, back;
@@ -1272,6 +1288,7 @@ window.HRL_LEARN = (function () {
 
     ch = getChapter(chapterId);
     if (!ch) {
+      setViewHeading('chapter', 'Chapter', true);
       setEmpty(rootEl, 'This chapter is not ready yet.', 'That lesson could not be found in the curriculum.');
       return;
     }
@@ -1286,6 +1303,8 @@ window.HRL_LEARN = (function () {
     complete = !!(rec && rec.completed);
     total = totalChapterCount() || 24;
 
+    setViewHeading('chapter', safeText(ch.title) || ch.id, true);
+
     header = el('header', { class: 'chapter-header' });
     copy = el('div', { class: 'chapter-header-copy' });
     kickerText = safeText(tier.name || ch.tier);
@@ -1296,13 +1315,7 @@ window.HRL_LEARN = (function () {
       kickerText += ' · ' + ch.minutes + (ch.minutes === 1 ? ' min' : ' min');
     }
     kicker = el('p', { class: 'hint', text: kickerText });
-    titleEl = el('h3', {
-      id: 'chapter-reading-title',
-      class: 'chapter-title',
-      text: safeText(ch.title) || ch.id
-    });
     copy.appendChild(kicker);
-    copy.appendChild(titleEl);
     if (safeText(ch.subtitle)) {
       subEl = el('p', { class: 'chapter-subtitle', text: safeText(ch.subtitle) });
       copy.appendChild(subEl);
@@ -1404,7 +1417,7 @@ window.HRL_LEARN = (function () {
     rootEl.appendChild(nav);
 
     setupChapterProgress(rendered);
-    focusChapterTitle(titleEl);
+    focusChapterTitle();
 
     S = shell();
     if (!S) {
@@ -1619,6 +1632,7 @@ window.HRL_LEARN = (function () {
     if (!hasDoc()) return;
     rootEl = document.getElementById('glossary-root');
     if (!rootEl) return;
+    setViewHeading('glossary', null, false);
     rootEl.innerHTML = '';
 
     if (!window.HRL_GLOSSARY) {

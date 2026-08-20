@@ -349,17 +349,11 @@
     return id || 'Badge';
   }
 
-  function restoreQuizChrome() {
-    var view;
-    var h2;
-    var hint;
-    if (!hasDocument()) return;
-    view = document.getElementById('view-quiz');
-    if (!view) return;
-    h2 = view.querySelector('h2');
-    hint = view.querySelector('p.hint');
-    if (h2) h2.textContent = 'Chapter quiz';
-    if (hint) hint.textContent = 'Answer each question, then read the explanation.';
+  function setViewHeading(viewName, headingText, hideHint) {
+    var sh = getNs('HRL_SHELL');
+    if (sh && typeof sh.setViewHeading === 'function') {
+      sh.setViewHeading(viewName, headingText, hideHint);
+    }
   }
 
   function emptyState(title, blurb) {
@@ -633,7 +627,6 @@
     var nextBtn;
     var live;
     var diagramWrap;
-    var heading;
     if (!session) return;
     host = hostEl(session.rootId);
     if (!host) return;
@@ -652,8 +645,6 @@
       'aria-live': 'polite'
     });
     shell.appendChild(live);
-    heading = el('p', { class: 'hint', text: session.title || (session.kind === 'review' ? 'Review' : 'Chapter quiz') });
-    shell.appendChild(heading);
     renderDots(shell);
     prompt = el('p', { class: 'quiz-prompt', id: 'quiz-prompt' });
     prompt.textContent = question.prompt || '';
@@ -939,10 +930,14 @@
     var ids;
     var questions;
     if (!hasDocument()) return;
-    restoreQuizChrome();
     host = hostEl('quiz-root');
     if (!host) return;
     chapter = getChapter(chapterId);
+    setViewHeading(
+      'quiz',
+      chapter && chapter.title ? chapter.title + ' — quiz' : 'Chapter quiz',
+      true
+    );
     ids = chapter && isArray(chapter.quizIds) ? chapter.quizIds : [];
     questions = shuffleArray(resolveIds(ids));
     if (questions.length < 3) {
@@ -994,6 +989,7 @@
     if (!hasDocument()) return;
     host = hostEl('review-root');
     if (!host) return;
+    setViewHeading('review', null, true);
     host.innerHTML = '';
     P = getNs('HRL_PROGRESS');
     now = Date.now();
@@ -1036,6 +1032,7 @@
     if (!hasDocument()) return;
     host = hostEl('review-root');
     if (!host) return;
+    setViewHeading('review', null, true);
     P = getNs('HRL_PROGRESS');
     ids = P && typeof P.dueReviews === 'function' ? P.dueReviews(Date.now()) : [];
     questions = resolveIds(ids);

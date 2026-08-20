@@ -134,21 +134,15 @@
     return document.getElementById('quiz-root');
   }
 
-  function setQuizChrome(title, hint) {
-    var view;
-    var h2;
-    var p;
-    if (!hasDocument()) return;
-    view = document.getElementById('view-quiz');
-    if (!view) return;
-    h2 = view.querySelector('h2');
-    p = view.querySelector('p.hint');
-    if (h2) h2.textContent = title;
-    if (p) p.textContent = hint;
+  function setViewHeading(headingText, hideHint) {
+    var S = getNs('HRL_SHELL');
+    if (S && typeof S.setViewHeading === 'function') {
+      S.setViewHeading('quiz', headingText, hideHint);
+    }
   }
 
   function restoreQuizChrome() {
-    setQuizChrome('Chapter quiz', 'Answer each question, then read the explanation.');
+    setViewHeading('Chapter quiz', false);
   }
 
   /* ------------------------------------------------------------------ */
@@ -456,7 +450,6 @@
     host.innerHTML = '';
     intro = [];
     if (place.selfIndex === 0) {
-      intro.push(el('p', { class: 'quiz-prompt', text: 'Find your starting point' }));
       intro.push(el('p', {
         class: 'hint',
         text: 'There are no wrong answers here — this just finds your starting point. Every chapter stays unlocked, and you can start anywhere.'
@@ -557,7 +550,6 @@
     var down;
     var itemText;
     var diagramWrap;
-    var kids;
     host = hostEl();
     if (!host || !place) return;
     q = place.current;
@@ -566,12 +558,7 @@
       return;
     }
     host.innerHTML = '';
-    kids = [];
-    kids.push(el('p', {
-      class: 'hint',
-      text: 'There are no wrong answers here — this just finds your starting point.'
-    }));
-    shell = wrapShell(kids);
+    shell = wrapShell();
     renderDots(shell);
     shell.appendChild(el('p', { class: 'quiz-prompt', text: q.prompt || '' }));
 
@@ -746,6 +733,7 @@
     var first;
     host = hostEl();
     if (!host || !result) return;
+    setViewHeading('Your starting point', true);
     tierObj = tierByNumber(result.recommendedTier);
     name = tierObj && tierObj.name ? tierObj.name : ('Tier ' + result.recommendedTier);
     blurb = tierObj && tierObj.blurb ? tierObj.blurb : '';
@@ -818,10 +806,7 @@
       recorded: false,
       result: null
     };
-    setQuizChrome(
-      'Find your starting point',
-      'There are no wrong answers here — this just finds your starting point.'
-    );
+    setViewHeading('Find your starting point', true);
     sh = getNs('HRL_SHELL');
     if (sh && typeof sh.showView === 'function') sh.showView('quiz');
     renderSelf();
