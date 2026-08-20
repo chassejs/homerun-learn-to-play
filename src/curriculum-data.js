@@ -47,7 +47,7 @@
         name: 'Rookie',
         blurb: 'For someone who has never watched a game.',
         colorVar: '--tier-rookie',
-        heroImage: 'brand/hero-tier-1.jpg',
+        heroImage: null, /* set to 'brand/hero-tier-1.jpg' if raster art is ever added; null keeps the SVG hero and avoids a 404 */
         heroFallback: { svg: 'tierHero', opts: { tier: 'rookie' } }
       },
       {
@@ -56,7 +56,7 @@
         name: 'Sandlot',
         blurb: 'The rules of play, for a first-season player or parent.',
         colorVar: '--tier-sandlot',
-        heroImage: 'brand/hero-tier-2.jpg',
+        heroImage: null, /* set to 'brand/hero-tier-2.jpg' if raster art is ever added; null keeps the SVG hero and avoids a 404 */
         heroFallback: { svg: 'tierHero', opts: { tier: 'sandlot' } }
       },
       {
@@ -65,7 +65,7 @@
         name: 'Diamond',
         blurb: 'How to actually play each position.',
         colorVar: '--tier-diamond',
-        heroImage: 'brand/hero-tier-3.jpg',
+        heroImage: null, /* set to 'brand/hero-tier-3.jpg' if raster art is ever added; null keeps the SVG hero and avoids a 404 */
         heroFallback: { svg: 'tierHero', opts: { tier: 'diamond' } }
       },
       {
@@ -74,7 +74,7 @@
         name: 'Select',
         blurb: 'Situations, systems, and team defence.',
         colorVar: '--tier-select',
-        heroImage: 'brand/hero-tier-4.jpg',
+        heroImage: null, /* set to 'brand/hero-tier-4.jpg' if raster art is ever added; null keeps the SVG hero and avoids a 404 */
         heroFallback: { svg: 'tierHero', opts: { tier: 'select' } }
       },
       {
@@ -83,7 +83,7 @@
         name: 'Elite',
         blurb: 'The rulebook’s hard parts and game management.',
         colorVar: '--tier-elite',
-        heroImage: 'brand/hero-tier-5.jpg',
+        heroImage: null, /* set to 'brand/hero-tier-5.jpg' if raster art is ever added; null keeps the SVG hero and avoids a 404 */
         heroFallback: { svg: 'tierHero', opts: { tier: 'elite' } }
       },
       {
@@ -92,7 +92,7 @@
         name: 'Pro Mind',
         blurb: 'Scoring, analytics, scouting, and the rulebook’s edges.',
         colorVar: '--tier-promind',
-        heroImage: 'brand/hero-tier-6.jpg',
+        heroImage: null, /* set to 'brand/hero-tier-6.jpg' if raster art is ever added; null keeps the SVG hero and avoids a 404 */
         heroFallback: { svg: 'tierHero', opts: { tier: 'promind' } }
       }
     ],
