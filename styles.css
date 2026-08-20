@@ -1071,6 +1071,24 @@ textarea {
   stroke: var(--teach-battery);
 }
 
+/* Hotspot answer feedback. The <g> does not paint; hit shapes carry
+   colour plus a thicker stroke so the cue is not colour-only. */
+.hrl-hotspot.correct .hrl-hotspot-hit {
+  fill: var(--teach-backup);
+  fill-opacity: 0.28;
+  stroke: var(--teach-backup);
+  stroke-width: 3;
+}
+.hrl-hotspot.wrong .hrl-hotspot-hit {
+  fill: var(--teach-ball);
+  fill-opacity: 0.28;
+  stroke: var(--teach-ball);
+  stroke-width: 3;
+}
+.hrl-hotspot.selected .hrl-hotspot-hit {
+  stroke-width: 4;
+}
+
 .keypoints {
   list-style: none;
   margin: 1rem 0 0;

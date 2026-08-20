@@ -91,38 +91,45 @@ window.HRL_INTERACTIVE = (function () {
     return a;
   }
 
-  function classStr(node) {
+  function getClass(node) {
     if (!node) return '';
-    if (node.className && node.className.baseVal !== undefined) return node.className.baseVal;
-    return node.className || '';
+    if (typeof node.className === 'string') return node.className;
+    if (typeof node.getAttribute === 'function') return node.getAttribute('class') || '';
+    return '';
   }
 
   function setClass(node, value) {
     if (!node) return;
-    if (node.className && node.className.baseVal !== undefined) node.className.baseVal = value;
-    else node.className = value;
+    if (typeof node.className === 'string') {
+      node.className = value;
+      return;
+    }
+    if (typeof node.setAttribute === 'function') node.setAttribute('class', value);
+  }
+
+  function addClass(node, cls) {
+    var cur;
+    if (!node || !cls) return;
+    cur = getClass(node).replace(/^\s+|\s+$/g, '');
+    if ((' ' + cur + ' ').indexOf(' ' + cls + ' ') !== -1) return;
+    setClass(node, cur ? cur + ' ' + cls : cls);
+  }
+
+  function removeClass(node, cls) {
+    var parts;
+    var i;
+    var out;
+    if (!node || !cls) return;
+    parts = getClass(node).split(/\s+/);
+    out = [];
+    for (i = 0; i < parts.length; i++) {
+      if (parts[i] && parts[i] !== cls) out.push(parts[i]);
+    }
+    setClass(node, out.join(' '));
   }
 
   function hasClass(node, name) {
-    return (' ' + classStr(node) + ' ').indexOf(' ' + name + ' ') !== -1;
-  }
-
-  function addClass(node, name) {
-    var cur;
-    if (!node || !name || hasClass(node, name)) return;
-    cur = trimStr(classStr(node));
-    setClass(node, cur ? cur + ' ' + name : name);
-  }
-
-  function removeClass(node, name) {
-    var parts, i, out;
-    if (!node || !name) return;
-    parts = trimStr(classStr(node)).split(/\s+/);
-    out = [];
-    for (i = 0; i < parts.length; i++) {
-      if (parts[i] && parts[i] !== name) out.push(parts[i]);
-    }
-    setClass(node, out.join(' '));
+    return (' ' + getClass(node) + ' ').indexOf(' ' + name + ' ') !== -1;
   }
 
   function el(tag, attrs, children) {
@@ -134,7 +141,7 @@ window.HRL_INTERACTIVE = (function () {
         if (!hasOwn(attrs, k)) continue;
         val = attrs[k];
         if (val == null) continue;
-        if (k === 'class') node.className = val;
+        if (k === 'class') setClass(node, val);
         else if (k === 'text') node.innerHTML = esc(val);
         else if (k === 'html') node.innerHTML = val;
         else if (k === 'for') node.setAttribute('for', val);
@@ -834,7 +841,7 @@ window.HRL_INTERACTIVE = (function () {
     }
 
     function paintZones() {
-      var j, id, zone, tokenId, item, label;
+      var j, id, zone, tokenId, item, label, g;
       for (j = 0; j < ids.length; j++) {
         id = ids[j];
         zone = overlay[id];
@@ -853,6 +860,13 @@ window.HRL_INTERACTIVE = (function () {
         removeClass(zone, 'wrong');
         if (state.marks[id] === 'correct') addClass(zone, 'correct');
         if (state.marks[id] === 'wrong') addClass(zone, 'wrong');
+        g = diagramWrap.querySelector('[data-hotspot="' + id + '"]');
+        if (g) {
+          removeClass(g, 'correct');
+          removeClass(g, 'wrong');
+          if (state.marks[id] === 'correct') addClass(g, 'correct');
+          if (state.marks[id] === 'wrong') addClass(g, 'wrong');
+        }
       }
     }
 
@@ -2114,12 +2128,12 @@ window.HRL_INTERACTIVE = (function () {
 
     function drawDiamond(arrows) {
       var c = currentCase();
-      var svg;
+      var svg, dests, i, id, g, mark, actors, j, a, got, exp, correct;
       svg = renderSvg(diagramHost, 'basePaths', startRunnersOpts(c, arrows || []));
-      bindHotspots(diagramHost, function (id) {
+      bindHotspots(diagramHost, function (hotId) {
         if (state.resolved || state.done) return;
-        if (id === 'plate') id = 'home';
-        placeSelected(id);
+        if (hotId === 'plate') hotId = 'home';
+        placeSelected(hotId);
       });
       if (svg) {
         bindDropTarget(svg, function (tokenId, e) {
@@ -2129,6 +2143,26 @@ window.HRL_INTERACTIVE = (function () {
           snap = nearestHotspot(diagramHost, e.clientX, e.clientY, ['home', 'first', 'second', 'third']);
           if (snap) placeSelected(snap);
         });
+      }
+      if (!state.resolved) return;
+      dests = ['home', 'first', 'second', 'third'];
+      correct = (c && c.correct) || {};
+      actors = runnerActors(c);
+      for (i = 0; i < dests.length; i++) {
+        id = dests[i];
+        g = diagramHost.querySelector('[data-hotspot="' + id + '"]');
+        if (!g) continue;
+        mark = '';
+        for (j = 0; j < actors.length; j++) {
+          a = actors[j];
+          got = state.assign[a.id];
+          exp = correct[a.id];
+          if (got === id && exp === id) mark = 'correct';
+          else if (got === id && exp !== id) mark = 'wrong';
+        }
+        removeClass(g, 'correct');
+        removeClass(g, 'wrong');
+        if (mark) addClass(g, mark);
       }
     }
 
@@ -2912,7 +2946,7 @@ window.HRL_INTERACTIVE = (function () {
       return;
     }
     host.style.display = '';
-    host.className = 'quiz-explain';
+    setClass(host, 'quiz-explain');
     host.appendChild(el('p', { text: text }));
   }
 
@@ -3058,7 +3092,7 @@ window.HRL_INTERACTIVE = (function () {
     }
 
     function drawField() {
-      var c, diagram, svgName, svgOpts, sit;
+      var c, diagram, svgName, svgOpts, sit, i, id, g, mark;
       c = current();
       diagram = c.diagram && typeof c.diagram === 'object' ? c.diagram : null;
       svgName = (diagram && diagram.svg) ? diagram.svg : 'field';
@@ -3070,10 +3104,19 @@ window.HRL_INTERACTIVE = (function () {
       if (sit && sit.runners && svgOpts.runners === undefined) svgOpts.runners = sit.runners;
       if (!svgOpts.title) svgOpts.title = situationLine(c) || 'Assign the nine';
       renderSvg(diagramHost, svgName, svgOpts);
-      bindHotspots(diagramHost, function (id) {
-        if (indexOf(ALL_POSITIONS, id) === -1) return;
-        applyRole(id, state.selectedRole);
+      bindHotspots(diagramHost, function (hotId) {
+        if (indexOf(ALL_POSITIONS, hotId) === -1) return;
+        applyRole(hotId, state.selectedRole);
       });
+      for (i = 0; i < ALL_POSITIONS.length; i++) {
+        id = ALL_POSITIONS[i];
+        g = diagramHost.querySelector('[data-hotspot="' + id + '"]');
+        if (!g) continue;
+        removeClass(g, 'correct');
+        removeClass(g, 'wrong');
+        mark = state.marks[id];
+        if (mark === 'correct' || mark === 'wrong') addClass(g, mark);
+      }
     }
 
     function applyRole(posId, role) {
@@ -4992,10 +5035,10 @@ window.HRL_INTERACTIVE = (function () {
         isPicked = state.picked === id;
         isRight = id === exp;
         btn = el('button', { type: 'button' });
-        btn.className = 'choice-btn' +
+        setClass(btn, 'choice-btn' +
           (isPicked ? ' selected' : '') +
           (state.resolved && isRight ? ' correct' : '') +
-          (isPicked && !isRight && state.fails ? ' wrong' : '');
+          (isPicked && !isRight && state.fails ? ' wrong' : ''));
         btn.setAttribute('aria-label', alignmentLabel(id));
         setPressed(btn, isPicked);
         if (preview) {

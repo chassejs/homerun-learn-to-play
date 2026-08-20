@@ -38,3 +38,31 @@ Fix requested: a monotonic render token so stale handlers are inert, a `finished
 flag so the result screen renders exactly once and `recordQuiz`/`recordIq` fire
 exactly once, an explicit bounds branch that renders the result rather than
 clearing the root, and a never-empty safety net. Same guards applied to `iq.js`.
+
+## Post-deploy finding (chunk 15)
+
+`HRL_SVG` emits hotspots as SVG `<g>` elements. On an SVG element `className` is
+a read-only `SVGAnimatedString`, not a writable string, so assigning to it is
+**silently ignored** — no exception, no effect. Measured on the deployed site:
+
+```
+node.tagName               -> "g"
+typeof node.className      -> "object"  ([object SVGAnimatedString])
+node.className = (node.className || '') + ' selected correct'   // no error
+node.getAttribute('class') -> "hrl-hotspot"                      // UNCHANGED
+```
+
+`quiz.js` `markHotspots()` used exactly that pattern, so **answering a hotspot
+question produced no visual feedback at all** — no correct/wrong marking, and no
+reveal of the right answer. 15 hotspot questions exist; 4 sit in chapter quizzes
+(ch11, ch12, ch13, ch14), so ordinary learners hit it.
+
+The pattern is codebase-wide: zero uses of `classList` in `quiz.js`, `iq.js`, or
+`interactive.js`, and several raw `className =` assignments including the
+`k === 'class'` branch of each file's element-builder helper — which widgets use
+to mark hotspots too.
+
+Fix requested: one SVG-safe `getClass`/`setClass`/`addClass`/`removeClass` helper
+per file, every call site routed through it, hotspot feedback restored (including
+revealing the correct hotspot on a wrong answer), matching CSS with a non-colour
+cue, and pure-logic tests for the helpers.

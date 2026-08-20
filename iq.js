@@ -99,6 +99,43 @@
       .replace(/"/g, '&quot;');
   }
 
+  function getClass(node) {
+    if (!node) return '';
+    if (typeof node.className === 'string') return node.className;
+    if (typeof node.getAttribute === 'function') return node.getAttribute('class') || '';
+    return '';
+  }
+
+  function setClass(node, value) {
+    if (!node) return;
+    if (typeof node.className === 'string') {
+      node.className = value;
+      return;
+    }
+    if (typeof node.setAttribute === 'function') node.setAttribute('class', value);
+  }
+
+  function addClass(node, cls) {
+    var cur;
+    if (!node || !cls) return;
+    cur = getClass(node).replace(/^\s+|\s+$/g, '');
+    if ((' ' + cur + ' ').indexOf(' ' + cls + ' ') !== -1) return;
+    setClass(node, cur ? cur + ' ' + cls : cls);
+  }
+
+  function removeClass(node, cls) {
+    var parts;
+    var i;
+    var out;
+    if (!node || !cls) return;
+    parts = getClass(node).split(/\s+/);
+    out = [];
+    for (i = 0; i < parts.length; i++) {
+      if (parts[i] && parts[i] !== cls) out.push(parts[i]);
+    }
+    setClass(node, out.join(' '));
+  }
+
   function el(tag, attrs, children) {
     var node;
     var k;
@@ -109,7 +146,7 @@
       for (k in attrs) {
         if (!hasOwn(attrs, k)) continue;
         val = attrs[k];
-        if (k === 'class') node.className = val;
+        if (k === 'class') setClass(node, val);
         else if (k === 'text') node.textContent = val;
         else if (k === 'html') node.innerHTML = val;
         else if (k === 'for') node.setAttribute('for', val);

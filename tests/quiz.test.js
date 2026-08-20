@@ -289,6 +289,64 @@ test('the completion callback fires exactly once across repeated advance calls',
   assertEqual(completions, 1, 'onComplete fires exactly once');
 });
 
+console.log('\nSVG-safe class helpers');
+
+test('getClass, setClass, addClass, and removeClass are exported functions', function () {
+  assert(typeof quiz.getClass === 'function', 'getClass');
+  assert(typeof quiz.setClass === 'function', 'setClass');
+  assert(typeof quiz.addClass === 'function', 'addClass');
+  assert(typeof quiz.removeClass === 'function', 'removeClass');
+});
+
+test('getClass returns a string for an object-valued className stub', function () {
+  const node = {
+    className: { baseVal: 'a' },
+    getAttribute: function (name) {
+      return name === 'class' ? 'a' : '';
+    }
+  };
+  const result = quiz.getClass(node);
+  assert(typeof result === 'string', 'must not return SVGAnimatedString');
+  assertEqual(result, 'a', 'getClass');
+  assert(quiz.getClass(null) === '', 'null node');
+});
+
+test('addClass does not duplicate an existing class', function () {
+  const node = { className: 'hrl-hotspot selected' };
+  quiz.addClass(node, 'selected');
+  assertEqual(node.className, 'hrl-hotspot selected', 'already present');
+  quiz.addClass(node, 'correct');
+  assertEqual(node.className, 'hrl-hotspot selected correct', 'adds missing token');
+});
+
+test('removeClass removes only the exact token, not a substring', function () {
+  const node = { className: 'incorrect selected' };
+  quiz.removeClass(node, 'correct');
+  assertEqual(node.className, 'incorrect selected', 'substring left intact');
+  quiz.removeClass(node, 'selected');
+  assertEqual(node.className, 'incorrect', 'exact token removed');
+});
+
+test('setClass routes to setAttribute when className is not a string', function () {
+  let attr = 'hrl-hotspot';
+  let called = false;
+  const node = {
+    className: { baseVal: 'hrl-hotspot' },
+    getAttribute: function (name) {
+      return name === 'class' ? attr : '';
+    },
+    setAttribute: function (name, value) {
+      called = true;
+      assertEqual(name, 'class', 'attribute name');
+      attr = value;
+    }
+  };
+  quiz.setClass(node, 'hrl-hotspot selected correct');
+  assert(called, 'setAttribute must be called');
+  assertEqual(attr, 'hrl-hotspot selected correct', 'class attr');
+  assert(typeof node.className === 'object', 'must not stringify className');
+});
+
 console.log('\n----------------------------------------');
 console.log('Results: ' + passed + ' passed, ' + failed + ' failed');
 if (global.__HRL_TEST_RUNNER && typeof global.__HRL_TEST_RUNNER.record === 'function') {
