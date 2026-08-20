@@ -48,7 +48,7 @@
         blurb: 'For someone who has never watched a game.',
         colorVar: '--tier-rookie',
         heroImage: 'brand/hero-tier-1.jpg',
-        heroFallback: { svg: 'field', opts: { labels: true, zones: true } }
+        heroFallback: { svg: 'tierHero', opts: { tier: 'rookie' } }
       },
       {
         order: 2,
@@ -57,7 +57,7 @@
         blurb: 'The rules of play, for a first-season player or parent.',
         colorVar: '--tier-sandlot',
         heroImage: 'brand/hero-tier-2.jpg',
-        heroFallback: { svg: 'field', opts: { labels: true, showDimensions: true, preset: 'major-ll' } }
+        heroFallback: { svg: 'tierHero', opts: { tier: 'sandlot' } }
       },
       {
         order: 3,
@@ -66,7 +66,7 @@
         blurb: 'How to actually play each position.',
         colorVar: '--tier-diamond',
         heroImage: 'brand/hero-tier-3.jpg',
-        heroFallback: { svg: 'field', opts: { positions: true, positionStyle: 'both', labels: true } }
+        heroFallback: { svg: 'tierHero', opts: { tier: 'diamond' } }
       },
       {
         order: 4,
@@ -75,14 +75,7 @@
         blurb: 'Situations, systems, and team defence.',
         colorVar: '--tier-select',
         heroImage: 'brand/hero-tier-4.jpg',
-        heroFallback: {
-          svg: 'field',
-          opts: {
-            positions: true,
-            alignment: 'standard',
-            roles: { ss: 'ball', '2b': 'base', cf: 'backup' }
-          }
-        }
+        heroFallback: { svg: 'tierHero', opts: { tier: 'select' } }
       },
       {
         order: 5,
@@ -91,7 +84,7 @@
         blurb: 'The rulebook’s hard parts and game management.',
         colorVar: '--tier-elite',
         heroImage: 'brand/hero-tier-5.jpg',
-        heroFallback: { svg: 'countMatrix', opts: { shade: 'leverage' } }
+        heroFallback: { svg: 'tierHero', opts: { tier: 'elite' } }
       },
       {
         order: 6,
@@ -100,7 +93,7 @@
         blurb: 'Scoring, analytics, scouting, and the rulebook’s edges.',
         colorVar: '--tier-promind',
         heroImage: 'brand/hero-tier-6.jpg',
-        heroFallback: { svg: 'scaleGauge', opts: { value: 50, label: '20–80 scouting scale' } }
+        heroFallback: { svg: 'tierHero', opts: { tier: 'promind' } }
       }
     ],
     chapters: [],

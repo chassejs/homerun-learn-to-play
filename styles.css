@@ -1012,6 +1012,7 @@ textarea {
   max-width: 100%;
   height: auto;
 }
+.hrl-svg-tierHero { border-radius: var(--radius-lg); }
 
 .section-diagram {
   margin: 0.75rem 0 0.5rem;

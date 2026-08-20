@@ -74,7 +74,8 @@
 
   var BUILDERS = [
     'field', 'strikeZone', 'basePaths', 'positionGrid', 'swingSequence',
-    'throwSequence', 'countMatrix', 'sprayChart', 'scaleGauge', 'radar', 'bar', 'timeline'
+    'throwSequence', 'countMatrix', 'sprayChart', 'scaleGauge', 'radar', 'bar',
+    'timeline', 'tierHero'
   ];
 
   var POSITION_NAMES = {
@@ -2379,6 +2380,609 @@
   }
 
   /* ------------------------------------------------------------------ */
+  /* tierHero() — illustrated chapter banners                            */
+  /* ------------------------------------------------------------------ */
+
+  var TIER_HERO = {
+    rookie: {
+      title: 'Empty diamond at first light',
+      desc: 'An illustrated banner of an empty baseball diamond at first light. A glove and a ball rest on home plate. Nobody is on the field yet.',
+      skyTop: '#062448',
+      skyMid: '#5a82b0',
+      skyHorizon: '#f6d4a1',
+      grass: '#4a6a3e',
+      grassDark: '#3a5532',
+      dirt: '#c8a678',
+      sil: '#0a1a2e',
+      tree: '#16301c',
+      horizon: 220,
+      sun: { x: 1030, y: 208, r: 38, fill: '#f8e2b4' }
+    },
+    sandlot: {
+      title: 'Batter waiting in the box',
+      desc: 'An illustrated banner of a sandlot backstop in morning light. A single batter silhouette waits in the box with the bat held back. No face is shown.',
+      skyTop: '#062448',
+      skyMid: '#3e6a9c',
+      skyHorizon: '#f0c48a',
+      grass: '#3f5e38',
+      grassDark: '#314a2d',
+      dirt: '#c09a6c',
+      sil: '#0a1a2e',
+      tree: '#142a18',
+      horizon: 232,
+      sun: { x: 1124, y: 118, r: 20, fill: '#f4d79a' }
+    },
+    diamond: {
+      title: 'Infielders in ready position',
+      desc: 'An illustrated banner of a baseball infield seen from the outfield. Three fielder silhouettes hold a mid-ready position across the diamond. No faces are shown.',
+      skyTop: '#062448',
+      skyMid: '#2d5480',
+      skyHorizon: '#e9a15c',
+      grass: '#355636',
+      grassDark: '#2a442c',
+      dirt: '#b89060',
+      sil: '#0a1a2e',
+      tree: '#122416',
+      horizon: 198,
+      sun: { x: 1140, y: 192, r: 26, fill: '#f0b060' }
+    },
+    select: {
+      title: 'Ball, base, and backup',
+      desc: 'An illustrated banner of a baseball field with throw arcs in teaching colours \u2014 ball, base, and backup \u2014 drawn as pure geometry across the diamond.',
+      skyTop: '#062448',
+      skyMid: '#2a4068',
+      skyHorizon: '#d4784a',
+      grass: '#2f4a32',
+      grassDark: '#243a28',
+      dirt: '#a88258',
+      sil: '#0a1a2e',
+      tree: '#102014',
+      horizon: 188,
+      sun: { x: 1160, y: 188, r: 22, fill: '#e07040' }
+    },
+    elite: {
+      title: 'Dugout rail and lineup card',
+      desc: 'An illustrated banner from a dugout rail looking out over the field. A lineup card and a pencil rest on the rail in the foreground.',
+      skyTop: '#062448',
+      skyMid: '#24365c',
+      skyHorizon: '#c45c3e',
+      grass: '#2a4230',
+      grassDark: '#1e3224',
+      dirt: '#8e6a44',
+      sil: '#0a1a2e',
+      tree: '#0c1a12',
+      horizon: 186
+    },
+    promind: {
+      title: 'Grandstand at dusk',
+      desc: 'An illustrated banner from a grandstand at dusk. A radar gun and a notebook sit on a seat. The field is small and distant below.',
+      skyTop: '#062448',
+      skyMid: '#0e1c3c',
+      skyHorizon: '#8a4a38',
+      grass: '#1a2e20',
+      grassDark: '#122018',
+      dirt: '#6a4a32',
+      sil: '#061018',
+      tree: '#061018',
+      horizon: 164
+    }
+  };
+
+  var TIER_HERO_NAVY = '#062448';
+  var TIER_HERO_CREAM = '#f6f3ec';
+  var TIER_HERO_RED = '#a3301f';
+  var TIER_HERO_W = 1200;
+  var TIER_HERO_H = 420;
+
+  function heroG(x, y, sx, sy) {
+    if (sy === undefined) sy = sx;
+    return 'translate(' + nr(x) + ' ' + nr(y) + ') scale(' + nr(sx) + ' ' + nr(sy) + ')';
+  }
+
+  function heroTreeline(x0, x1, y, color, seed) {
+    var parts, x, h, w, i, canopy;
+    parts = [];
+    parts.push('<g class="hrl-tierHero-trees" fill="' + color + '">');
+    x = x0;
+    i = 0;
+    while (x < x1) {
+      h = 22 + ((i * 17 + seed) % 28);
+      w = 16 + ((i * 13 + seed) % 16);
+      canopy = y - h * 0.55;
+      parts.push('<ellipse cx="' + nr(x) + '" cy="' + nr(canopy) + '" rx="' +
+        nr(w * 0.72) + '" ry="' + nr(h * 0.48) + '"/>');
+      parts.push('<ellipse cx="' + nr(x - w * 0.28) + '" cy="' + nr(canopy + 4) +
+        '" rx="' + nr(w * 0.4) + '" ry="' + nr(h * 0.32) + '"/>');
+      parts.push('<ellipse cx="' + nr(x + w * 0.26) + '" cy="' + nr(canopy + 5) +
+        '" rx="' + nr(w * 0.38) + '" ry="' + nr(h * 0.3) + '"/>');
+      parts.push('<rect x="' + nr(x - 2) + '" y="' + nr(y - h * 0.22) +
+        '" width="4" height="' + nr(h * 0.24) + '"/>');
+      x += w * 0.78;
+      i += 1;
+    }
+    parts.push('</g>');
+    return parts.join('');
+  }
+
+  function heroDiamondPoly(home, first, second, third, fill, stroke, sw) {
+    var d = 'M' + nr(home.x) + ',' + nr(home.y) +
+      ' L' + nr(first.x) + ',' + nr(first.y) +
+      ' L' + nr(second.x) + ',' + nr(second.y) +
+      ' L' + nr(third.x) + ',' + nr(third.y) + ' Z';
+    return '<path d="' + d + '" fill="' + fill + '"' +
+      (stroke ? ' stroke="' + stroke + '" stroke-width="' + (sw || 2) +
+        '" stroke-linejoin="round"' : '') + '/>';
+  }
+
+  function heroBallMark(x, y, r) {
+    var s;
+    r = r || 8;
+    s = '<g class="hrl-tierHero-ball">';
+    s += '<circle cx="' + nr(x) + '" cy="' + nr(y) + '" r="' + nr(r) +
+      '" fill="' + TIER_HERO_CREAM + '" stroke="' + TIER_HERO_NAVY + '" stroke-width="1.1"/>';
+    s += '<path d="M' + nr(x - r * 0.55) + ',' + nr(y - r * 0.38) +
+      ' C' + nr(x - r * 0.12) + ',' + nr(y) + ' ' + nr(x - r * 0.12) + ',' + nr(y) +
+      ' ' + nr(x - r * 0.55) + ',' + nr(y + r * 0.38) + '" fill="none" stroke="' +
+      TIER_HERO_RED + '" stroke-width="' + nr(Math.max(1, r * 0.16)) + '"/>';
+    s += '<path d="M' + nr(x + r * 0.55) + ',' + nr(y - r * 0.38) +
+      ' C' + nr(x + r * 0.12) + ',' + nr(y) + ' ' + nr(x + r * 0.12) + ',' + nr(y) +
+      ' ' + nr(x + r * 0.55) + ',' + nr(y + r * 0.38) + '" fill="none" stroke="' +
+      TIER_HERO_RED + '" stroke-width="' + nr(Math.max(1, r * 0.16)) + '"/>';
+    return s + '</g>';
+  }
+
+  function heroGlove(x, y, s) {
+    return '<g class="hrl-tierHero-glove" transform="' + heroG(x, y, s) +
+      ' rotate(-28)" fill="#5a3a24" stroke="#0a1a2e" stroke-width="1.1">' +
+      '<ellipse cx="0" cy="8" rx="16" ry="14"/>' +
+      '<ellipse cx="-13" cy="-8" rx="6" ry="12"/>' +
+      '<ellipse cx="-3" cy="-14" rx="5.5" ry="13"/>' +
+      '<ellipse cx="7" cy="-13" rx="5.5" ry="12.5"/>' +
+      '<ellipse cx="15" cy="-6" rx="5.5" ry="11"/>' +
+      '<ellipse cx="18" cy="12" rx="7" ry="12"/>' +
+      '<path d="M12,-2 Q24,8 16,18 L8,8 Z" fill="#4a2e1c"/>' +
+      '</g>';
+  }
+
+  /* Rear-view ready fielder. Head is a solid helmet oval \u2014 no features. */
+  function silReady(x, y, s, flip) {
+    var sx = flip ? -s : s;
+    return '<g class="hrl-tierHero-fielder" transform="' + heroG(x, y, sx, s) +
+      '" fill="#0a1a2e">' +
+      '<ellipse cx="-16" cy="1" rx="8" ry="3.2"/>' +
+      '<ellipse cx="16" cy="1" rx="8" ry="3.2"/>' +
+      '<path d="M-18,0 Q-22,-22 -11,-48 L-2,-46 Q-8,-22 -6,0 Z"/>' +
+      '<path d="M18,0 Q22,-22 11,-48 L2,-46 Q8,-22 6,0 Z"/>' +
+      '<path d="M-11,-46 L-9,-72 L9,-72 L11,-46 Z"/>' +
+      '<ellipse cx="0" cy="-84" rx="9" ry="11"/>' +
+      '<ellipse cx="0" cy="-92" rx="8" ry="5"/>' +
+      '<path d="M-9,-68 C-24,-58 -22,-36 -14,-32 L-9,-38 C-14,-44 -10,-62 -6,-68 Z"/>' +
+      '<path d="M9,-68 C24,-58 28,-34 22,-28 L16,-26 C14,-36 12,-62 6,-68 Z"/>' +
+      '<ellipse cx="24" cy="-24" rx="10" ry="7.5"/>' +
+      '</g>';
+  }
+
+  /* Rear three-quarter batter, bat held back. Helmet oval only \u2014 no features. */
+  function silBatter(x, y, s) {
+    return '<g class="hrl-tierHero-batter" transform="' + heroG(x, y, s) +
+      '" fill="#0a1a2e">' +
+      '<path d="M-14,0 L-18,-8 L-12,-44 L2,-42 L4,0 Z"/>' +
+      '<path d="M6,-2 L10,2 L24,2 L18,-40 L4,-42 Z"/>' +
+      '<path d="M-10,-42 L-4,-76 L16,-72 L10,-40 Z"/>' +
+      '<ellipse cx="6" cy="-88" rx="11" ry="13"/>' +
+      '<ellipse cx="6" cy="-78" rx="12" ry="4"/>' +
+      '<path d="M-2,-64 L-16,-52 L-12,-46 L4,-60 Z"/>' +
+      '<path d="M8,-62 L18,-50 L14,-46 L6,-58 Z"/>' +
+      '<path d="M-10,-58 L-38,-118 L-32,-122 L-4,-56 Z"/>' +
+      '<circle cx="-35" cy="-120" r="3.4"/>' +
+      '</g>';
+  }
+
+  function heroArc(a, b, lift, color, sw, dash) {
+    var mx, my;
+    mx = (a.x + b.x) / 2;
+    my = (a.y + b.y) / 2 - lift;
+    return '<path d="M' + nr(a.x) + ',' + nr(a.y) + ' Q' + nr(mx) + ',' + nr(my) +
+      ' ' + nr(b.x) + ',' + nr(b.y) + '" fill="none" stroke="' + color +
+      '" stroke-width="' + sw + '" stroke-linecap="round"' +
+      (dash ? ' stroke-dasharray="' + dash + '"' : '') + '/>';
+  }
+
+  function heroDot(x, y, r, fill) {
+    return '<circle cx="' + nr(x) + '" cy="' + nr(y) + '" r="' + nr(r) +
+      '" fill="' + fill + '"/>';
+  }
+
+  function heroLineupCard(x, y) {
+    var i, ly, s;
+    s = '<g class="hrl-tierHero-card" transform="translate(' + nr(x) + ' ' +
+      nr(y) + ') rotate(-5)">';
+    s += '<rect x="0" y="0" width="92" height="118" rx="3" fill="' +
+      TIER_HERO_CREAM + '" stroke="#0a1a2e" stroke-width="1.2"/>';
+    s += '<rect x="0" y="0" width="92" height="20" rx="3" fill="' + TIER_HERO_NAVY + '"/>';
+    s += '<rect x="0" y="12" width="92" height="8" fill="' + TIER_HERO_NAVY + '"/>';
+    for (i = 0; i < 8; i++) {
+      ly = 32 + i * 10;
+      s += '<line x1="12" y1="' + ly + '" x2="80" y2="' + ly + '" stroke="' +
+        TIER_HERO_NAVY + '" stroke-width="1.1" opacity="0.4"/>';
+    }
+    s += '</g>';
+    return s;
+  }
+
+  function heroPencil(x, y) {
+    return '<g class="hrl-tierHero-pencil" transform="translate(' + nr(x) + ' ' +
+      nr(y) + ') rotate(-28)">' +
+      '<rect x="-50" y="-3.5" width="9" height="7" rx="1.5" fill="' + TIER_HERO_CREAM + '"/>' +
+      '<rect x="-41" y="-3.5" width="6" height="7" fill="#c4a070"/>' +
+      '<rect x="-35" y="-3.5" width="68" height="7" rx="1" fill="' + TIER_HERO_RED + '"/>' +
+      '<polygon points="33,-3.5 33,3.5 48,0" fill="#e8c9a0"/>' +
+      '<polygon points="44,-1.3 44,1.3 48,0" fill="#0a1a2e"/>' +
+      '</g>';
+  }
+
+  function heroRadarGun(x, y, s) {
+    return '<g class="hrl-tierHero-radar" transform="' + heroG(x, y, s) +
+      ' rotate(-16)">' +
+      '<rect x="-7" y="6" width="12" height="30" rx="2" fill="#0a1a2e"/>' +
+      '<path d="M-4,8 Q-10,16 -4,22" fill="none" stroke="#0a1a2e" stroke-width="2"/>' +
+      '<rect x="-16" y="-10" width="50" height="20" rx="4" fill="' + TIER_HERO_RED + '"/>' +
+      '<rect x="30" y="-6" width="24" height="12" rx="2" fill="#8d2418"/>' +
+      '<rect x="2" y="-18" width="16" height="9" rx="2" fill="#0a1a2e"/>' +
+      '<circle cx="10" cy="-13.5" r="2.2" fill="' + TIER_HERO_CREAM + '"/>' +
+      '</g>';
+  }
+
+  function heroNotebook(x, y, s) {
+    var i, t;
+    t = '<g class="hrl-tierHero-notebook" transform="' + heroG(x, y, s) + ' rotate(10)">';
+    t += '<rect x="-30" y="-20" width="58" height="42" rx="2" fill="' +
+      TIER_HERO_CREAM + '" stroke="#0a1a2e" stroke-width="1.1"/>';
+    t += '<rect x="-3" y="-20" width="5" height="42" fill="' + TIER_HERO_NAVY + '"/>';
+    for (i = 0; i < 5; i++) {
+      t += '<line x1="6" y1="' + (-10 + i * 6) + '" x2="22" y2="' + (-10 + i * 6) +
+        '" stroke="' + TIER_HERO_NAVY + '" stroke-width="0.9" opacity="0.35"/>';
+    }
+    t += '</g>';
+    return t;
+  }
+
+  function heroOverlay(opts) {
+    var hasTitle, hasSub, tLines, sLines, padX, padY, th, sh, gap, h, x, y, w;
+    var parts, ty, sy;
+    hasTitle = opts.title !== undefined && opts.title !== null && String(opts.title) !== '';
+    hasSub = opts.subtitle !== undefined && opts.subtitle !== null && String(opts.subtitle) !== '';
+    if (!hasTitle && !hasSub) return '';
+    tLines = hasTitle ? wrapWords(String(opts.title), 16) : [];
+    sLines = hasSub ? wrapWords(String(opts.subtitle), 28) : [];
+    padX = 22;
+    padY = 18;
+    th = 40;
+    sh = 22;
+    gap = (tLines.length && sLines.length) ? 8 : 0;
+    h = padY * 2 + tLines.length * th + gap + sLines.length * sh;
+    x = 28;
+    y = 64;
+    w = 364;
+    parts = [];
+    parts.push('<g class="hrl-tierHero-copy">');
+    parts.push('<rect class="hrl-tierHero-scrim" x="' + x + '" y="' + y +
+      '" width="' + w + '" height="' + nr(h) +
+      '" rx="16" fill="' + TIER_HERO_NAVY + '" fill-opacity="0.88"/>');
+    ty = y + padY + 26;
+    if (tLines.length) {
+      parts.push(textLines(x + padX, ty, tLines, {
+        size: 32,
+        fill: TIER_HERO_CREAM,
+        weight: 700,
+        anchor: 'start',
+        cls: 'hrl-tierHero-title'
+      }, th));
+    }
+    if (sLines.length) {
+      sy = tLines.length ? (ty + tLines.length * th + gap) : (y + padY + 14);
+      parts.push(textLines(x + padX, sy, sLines, {
+        size: 16,
+        fill: TIER_HERO_CREAM,
+        weight: 400,
+        anchor: 'start',
+        cls: 'hrl-tierHero-sub'
+      }, sh));
+    }
+    parts.push('</g>');
+    return parts.join('');
+  }
+
+  function sceneRookie(meta) {
+    var home, first, second, third, mound, parts, i, gx, gy, ic;
+    home = { x: 848, y: 392 };
+    first = { x: 1148, y: 268 };
+    second = { x: 930, y: 158 };
+    third = { x: 640, y: 268 };
+    mound = lerpPt(home, second, 0.4);
+    parts = [];
+    parts.push(heroTreeline(430, 1200, meta.horizon + 2, meta.tree, 3));
+    parts.push('<rect x="0" y="' + meta.horizon + '" width="' + TIER_HERO_W +
+      '" height="' + (TIER_HERO_H - meta.horizon) + '" fill="url(#REPLACE_GRASS)"/>');
+    for (i = 0; i < 6; i++) {
+      gx = 470 + i * 118;
+      gy = 250 + (i % 2) * 18;
+      parts.push('<rect x="' + gx + '" y="' + gy + '" width="70" height="' +
+        (TIER_HERO_H - gy) + '" fill="' + meta.grassDark + '" opacity="0.12"/>');
+    }
+    parts.push('<ellipse cx="' + nr(home.x) + '" cy="' + nr(home.y - 8) +
+      '" rx="78" ry="36" fill="' + meta.dirt + '"/>');
+    parts.push(heroDiamondPoly(home, first, second, third, meta.dirt, TIER_HERO_CREAM, 2.4));
+    ic = {
+      x: (home.x + first.x + second.x + third.x) / 4,
+      y: (home.y + first.y + second.y + third.y) / 4
+    };
+    parts.push(heroDiamondPoly(
+      lerpPt(home, ic, 0.22),
+      lerpPt(first, ic, 0.22),
+      lerpPt(second, ic, 0.22),
+      lerpPt(third, ic, 0.22),
+      meta.grass, '', 0
+    ));
+    parts.push('<ellipse cx="' + nr(mound.x) + '" cy="' + nr(mound.y) +
+      '" rx="22" ry="10" fill="' + meta.dirt + '" stroke="' + meta.dirt + '"/>');
+    parts.push('<rect x="' + nr(mound.x - 8) + '" y="' + nr(mound.y - 2) +
+      '" width="16" height="3" rx="1" fill="' + TIER_HERO_CREAM + '" opacity="0.85"/>');
+    parts.push('<line x1="' + nr(home.x) + '" y1="' + nr(home.y) + '" x2="' +
+      nr(first.x + 40) + '" y2="' + nr(first.y - 18) + '" stroke="' + TIER_HERO_CREAM +
+      '" stroke-width="2"/>');
+    parts.push('<line x1="' + nr(home.x) + '" y1="' + nr(home.y) + '" x2="' +
+      nr(third.x - 40) + '" y2="' + nr(third.y - 18) + '" stroke="' + TIER_HERO_CREAM +
+      '" stroke-width="2"/>');
+    parts.push('<path d="' + platePath(home.x, home.y - 6, 22) + '" fill="' +
+      TIER_HERO_CREAM + '" stroke="' + TIER_HERO_NAVY + '" stroke-width="1"/>');
+    parts.push(heroGlove(home.x - 10, home.y - 18, 1.15));
+    parts.push(heroBallMark(home.x + 8, home.y - 14, 9));
+    parts.push('<path d="M1080,92 q8,6 16,0" fill="none" stroke="#0a1a2e" stroke-width="1.4" opacity="0.45"/>');
+    parts.push('<path d="M1112,80 q6,5 12,0" fill="none" stroke="#0a1a2e" stroke-width="1.2" opacity="0.4"/>');
+    return parts.join('');
+  }
+
+  function sceneSandlot(meta) {
+    var home, mound, parts, d;
+    home = { x: 802, y: 368 };
+    mound = { x: 848, y: 236 };
+    parts = [];
+    parts.push(heroTreeline(480, 1200, meta.horizon + 2, meta.tree, 9));
+    parts.push('<rect x="0" y="' + meta.horizon + '" width="' + TIER_HERO_W +
+      '" height="' + (TIER_HERO_H - meta.horizon) + '" fill="url(#REPLACE_GRASS)"/>');
+    parts.push('<ellipse cx="860" cy="330" rx="280" ry="90" fill="' + meta.dirt + '"/>');
+    parts.push('<ellipse cx="' + mound.x + '" cy="' + mound.y +
+      '" rx="28" ry="12" fill="' + meta.dirt + '"/>');
+    parts.push('<rect x="' + (mound.x - 7) + '" y="' + (mound.y - 2) +
+      '" width="14" height="3" fill="' + TIER_HERO_CREAM + '" opacity="0.8"/>');
+    parts.push('<line x1="' + home.x + '" y1="' + home.y + '" x2="1040" y2="210" stroke="' +
+      TIER_HERO_CREAM + '" stroke-width="2" opacity="0.8"/>');
+    parts.push('<line x1="' + home.x + '" y1="' + home.y + '" x2="620" y2="210" stroke="' +
+      TIER_HERO_CREAM + '" stroke-width="2" opacity="0.8"/>');
+    d = 'M560,330 C560,120 830,36 830,36 C830,36 1100,120 1100,330 L1048,330 C1048,150 830,70 830,70 C830,70 612,150 612,330 Z';
+    parts.push('<path d="' + d + '" fill="#0a1a2e" opacity="0.18"/>');
+    parts.push('<path d="' + d + '" fill="url(#REPLACE_MESH)"/>');
+    parts.push('<path d="M560,330 L560,118" stroke="#0a1a2e" stroke-width="7" stroke-linecap="round"/>');
+    parts.push('<path d="M1100,330 L1100,118" stroke="#0a1a2e" stroke-width="7" stroke-linecap="round"/>');
+    parts.push('<path d="M560,118 C560,50 830,28 830,28 C830,28 1100,50 1100,118" fill="none" stroke="#0a1a2e" stroke-width="7" stroke-linecap="round"/>');
+    parts.push('<line x1="612" y1="78" x2="1048" y2="78" stroke="#0a1a2e" stroke-width="3"/>');
+    parts.push('<path d="M830,78 L830,132 L892,105 Z" fill="' + TIER_HERO_RED + '"/>');
+    parts.push('<rect x="' + (home.x - 48) + '" y="' + (home.y - 46) +
+      '" width="36" height="44" fill="none" stroke="' + TIER_HERO_CREAM +
+      '" stroke-width="1.6" opacity="0.7"/>');
+    parts.push('<path d="' + platePath(home.x, home.y - 4, 20) + '" fill="' +
+      TIER_HERO_CREAM + '"/>');
+    parts.push(silBatter(home.x - 18, home.y - 8, 1.22));
+    return parts.join('');
+  }
+
+  function sceneDiamond(meta) {
+    var home, first, second, third, mound, parts, i, fx;
+    home = { x: 868, y: 176 };
+    first = { x: 1028, y: 214 };
+    second = { x: 868, y: 248 };
+    third = { x: 708, y: 214 };
+    mound = { x: 868, y: 214 };
+    parts = [];
+    parts.push('<rect x="470" y="' + (meta.horizon - 16) +
+      '" width="730" height="16" fill="#0a1a2e"/>');
+    for (i = 0; i < 18; i++) {
+      fx = 490 + i * 40;
+      parts.push('<rect x="' + fx + '" y="' + (meta.horizon - 28) +
+        '" width="4" height="28" fill="#0a1a2e"/>');
+    }
+    parts.push('<rect x="1172" y="78" width="6" height="' + (meta.horizon - 78) +
+      '" fill="#0a1a2e"/>');
+    parts.push('<rect x="1170" y="78" width="10" height="58" rx="2" fill="' +
+      TIER_HERO_RED + '"/>');
+    parts.push(heroTreeline(480, 1168, meta.horizon - 16, meta.tree, 5));
+    parts.push('<rect x="0" y="' + meta.horizon + '" width="' + TIER_HERO_W +
+      '" height="' + (TIER_HERO_H - meta.horizon) + '" fill="url(#REPLACE_GRASS)"/>');
+    parts.push('<ellipse cx="868" cy="300" rx="340" ry="70" fill="' + meta.dirt + '" opacity="0.95"/>');
+    parts.push(heroDiamondPoly(home, first, second, third, meta.dirt, TIER_HERO_CREAM, 1.6));
+    parts.push('<ellipse cx="' + mound.x + '" cy="' + mound.y +
+      '" rx="14" ry="6" fill="' + meta.dirt + '"/>');
+    parts.push('<path d="' + platePath(home.x, home.y, 10) + '" fill="' + TIER_HERO_CREAM + '"/>');
+    parts.push(silReady(640, 338, 1.08, false));
+    parts.push(silReady(820, 292, 0.78, false));
+    parts.push(silReady(1048, 348, 1.22, true));
+    return parts.join('');
+  }
+
+  function sceneSelect(meta) {
+    var home, first, second, third, lf, cf, ss, twob, parts;
+    home = { x: 860, y: 388 };
+    first = { x: 1140, y: 252 };
+    second = { x: 930, y: 108 };
+    third = { x: 650, y: 252 };
+    lf = { x: 620, y: 148 };
+    cf = { x: 940, y: 78 };
+    ss = { x: 790, y: 210 };
+    twob = { x: 1020, y: 208 };
+    parts = [];
+    parts.push(heroTreeline(460, 1200, meta.horizon + 2, meta.tree, 12));
+    parts.push('<rect x="0" y="' + meta.horizon + '" width="' + TIER_HERO_W +
+      '" height="' + (TIER_HERO_H - meta.horizon) + '" fill="url(#REPLACE_GRASS)"/>');
+    parts.push(heroDiamondPoly(home, first, second, third, meta.dirt, TIER_HERO_CREAM, 2));
+    parts.push('<ellipse cx="860" cy="250" rx="36" ry="16" fill="' + meta.dirt + '"/>');
+    parts.push(heroArc(home, lf, 36, '#dc2626', 4, ''));
+    parts.push(heroArc(lf, ss, 22, '#dc2626', 3.2, ''));
+    parts.push(heroArc(twob, second, 18, '#facc15', 3.4, ''));
+    parts.push(heroArc(cf, lf, 28, '#16a34a', 3, '8 7'));
+    parts.push(heroDot(home.x, home.y, 5, meta.sil));
+    parts.push(heroDot(first.x, first.y, 4.5, meta.sil));
+    parts.push(heroDot(second.x, second.y, 4.5, meta.sil));
+    parts.push(heroDot(third.x, third.y, 4.5, meta.sil));
+    parts.push(heroDot(ss.x, ss.y, 5, meta.sil));
+    parts.push(heroDot(twob.x, twob.y, 5, meta.sil));
+    parts.push(heroDot(cf.x, cf.y, 5, meta.sil));
+    parts.push(heroDot(lf.x, lf.y, 6, meta.sil));
+    parts.push(heroBallMark(lf.x + 10, lf.y - 12, 8));
+    return parts.join('');
+  }
+
+  function sceneElite(meta) {
+    var home, first, second, third, parts, i;
+    home = { x: 900, y: 214 };
+    first = { x: 1008, y: 236 };
+    second = { x: 900, y: 258 };
+    third = { x: 792, y: 236 };
+    parts = [];
+    parts.push(heroTreeline(500, 1200, meta.horizon + 2, meta.tree, 7));
+    parts.push('<rect x="0" y="' + meta.horizon + '" width="' + TIER_HERO_W +
+      '" height="' + (TIER_HERO_H - meta.horizon) + '" fill="url(#REPLACE_GRASS)"/>');
+    parts.push('<rect x="520" y="' + (meta.horizon - 10) +
+      '" width="680" height="10" fill="#0a1a2e" opacity="0.85"/>');
+    parts.push(heroDiamondPoly(home, first, second, third, meta.dirt, TIER_HERO_CREAM, 1.2));
+    parts.push('<path d="M0,286 L1200,274 L1200,420 L0,420 Z" fill="#0a1628" opacity="0.55"/>');
+    parts.push('<path d="M0,292 L1200,280 L1200,314 L0,322 Z" fill="#3a2718"/>');
+    parts.push('<path d="M0,314 L1200,306 L1200,338 L0,348 Z" fill="#24180f"/>');
+    for (i = 0; i < 10; i++) {
+      parts.push('<line x1="' + (80 + i * 120) + '" y1="' + (296 + i * -0.4) +
+        '" x2="' + (80 + i * 120) + '" y2="' + (328 + i * -0.3) +
+        '" stroke="#1a120c" stroke-width="2" opacity="0.35"/>');
+    }
+    parts.push(heroLineupCard(742, 178));
+    parts.push(heroPencil(980, 292));
+    parts.push('<g transform="translate(1118 286)" fill="#0a1a2e">');
+    parts.push('<ellipse cx="0" cy="0" rx="22" ry="15"/>');
+    parts.push('<path d="M-16,4 Q0,16 16,4 L12,8 Q0,18 -12,8 Z"/>');
+    parts.push('</g>');
+    return parts.join('');
+  }
+
+  function scenePromind(meta) {
+    var home, first, second, third, parts, i, y, inset, w, rowH;
+    home = { x: 908, y: 190 };
+    first = { x: 978, y: 178 };
+    second = { x: 928, y: 166 };
+    third = { x: 858, y: 178 };
+    parts = [];
+    parts.push('<circle cx="1088" cy="58" r="11" fill="' + TIER_HERO_CREAM + '" opacity="0.28"/>');
+    parts.push('<g fill="#0a1a2e">');
+    parts.push('<rect x="1048" y="92" width="7" height="' + (meta.horizon - 92) + '"/>');
+    parts.push('<rect x="1148" y="108" width="7" height="' + (meta.horizon - 108) + '"/>');
+    parts.push('<path d="M1036,96 L1068,96 L1074,84 L1030,84 Z"/>');
+    parts.push('<path d="M1136,112 L1168,112 L1174,100 L1130,100 Z"/>');
+    parts.push('</g>');
+    parts.push('<circle cx="1052" cy="88" r="10" fill="' + TIER_HERO_CREAM + '" opacity="0.18"/>');
+    parts.push('<circle cx="1152" cy="104" r="10" fill="' + TIER_HERO_CREAM + '" opacity="0.16"/>');
+    parts.push('<rect x="0" y="' + meta.horizon + '" width="' + TIER_HERO_W +
+      '" height="' + (TIER_HERO_H - meta.horizon) + '" fill="url(#REPLACE_GRASS)"/>');
+    parts.push(heroDiamondPoly(home, first, second, third, meta.dirt, TIER_HERO_CREAM, 0.9));
+    parts.push('<ellipse cx="918" cy="168" rx="70" ry="22" fill="' + meta.grass + '" opacity="0.4"/>');
+    rowH = 28;
+    for (i = 0; i < 8; i++) {
+      y = 196 + i * rowH;
+      inset = 8 + (7 - i) * 10;
+      w = TIER_HERO_W - inset * 0.4;
+      parts.push('<path d="M' + inset + ',' + y + ' L' + (w) + ',' + (y - 6) +
+        ' L' + w + ',' + (y + 8) + ' L' + inset + ',' + (y + 14) + ' Z" fill="' +
+        (i % 2 ? '#14243c' : '#0e1c32') + '"/>');
+      parts.push('<path d="M' + inset + ',' + (y + 14) + ' L' + w + ',' + (y + 8) +
+        ' L' + w + ',' + (y + 18) + ' L' + inset + ',' + (y + 22) + ' Z" fill="#0a1628"/>');
+    }
+    parts.push('<path d="M760,360 L1160,348 L1160,392 L760,408 Z" fill="#1a2a44"/>');
+    parts.push('<path d="M760,392 L1160,376 L1160,396 L760,414 Z" fill="#0a1628"/>');
+    parts.push(heroNotebook(1028, 368, 1.15));
+    parts.push(heroRadarGun(880, 358, 1.2));
+    return parts.join('');
+  }
+
+  function heroDefs(hid, meta) {
+    var hz, midAt, horAt;
+    hz = meta.horizon / TIER_HERO_H;
+    midAt = Math.round(hz * 55);
+    horAt = Math.round(hz * 100);
+    if (midAt < 1) midAt = 1;
+    if (horAt <= midAt) horAt = midAt + 1;
+    return '<defs>' +
+      '<linearGradient id="' + hid + '-sky" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0%" stop-color="' + meta.skyTop + '"/>' +
+      '<stop offset="' + midAt + '%" stop-color="' + meta.skyMid + '"/>' +
+      '<stop offset="' + horAt + '%" stop-color="' + meta.skyHorizon + '"/>' +
+      '<stop offset="100%" stop-color="' + meta.skyHorizon + '"/>' +
+      '</linearGradient>' +
+      '<linearGradient id="' + hid + '-grass" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0%" stop-color="' + meta.grass + '"/>' +
+      '<stop offset="100%" stop-color="' + meta.grassDark + '"/>' +
+      '</linearGradient>' +
+      '<pattern id="' + hid + '-mesh" width="14" height="14" patternUnits="userSpaceOnUse">' +
+      '<path d="M7,0 L14,7 L7,14 L0,7 Z" fill="none" stroke="#0a1a2e" stroke-width="1"/>' +
+      '</pattern>' +
+      '</defs>';
+  }
+
+  function fillHeroTokens(svg, hid) {
+    return String(svg || '')
+      .replace(/url\(#REPLACE_GRASS\)/g, 'url(#' + hid + '-grass)')
+      .replace(/url\(#REPLACE_MESH\)/g, 'url(#' + hid + '-mesh)');
+  }
+
+  function sceneOf(tier, meta) {
+    if (tier === 'sandlot') return sceneSandlot(meta);
+    if (tier === 'diamond') return sceneDiamond(meta);
+    if (tier === 'select') return sceneSelect(meta);
+    if (tier === 'elite') return sceneElite(meta);
+    if (tier === 'promind') return scenePromind(meta);
+    return sceneRookie(meta);
+  }
+
+  function tierHero(opts) {
+    var W, H, tier, meta, hid, parts, title, desc, glowY, glowW, overlay;
+    opts = optsOf(opts);
+    W = TIER_HERO_W;
+    H = TIER_HERO_H;
+    tier = opts.tier;
+    if (!Object.prototype.hasOwnProperty.call(TIER_HERO, tier)) tier = 'rookie';
+    meta = TIER_HERO[tier];
+    hid = uid();
+    parts = [];
+    parts.push(heroDefs(hid, meta));
+    parts.push('<rect class="hrl-tierHero-sky" x="0" y="0" width="' + W +
+      '" height="' + H + '" fill="url(#' + hid + '-sky)"/>');
+    glowY = meta.horizon;
+    glowW = tier === 'rookie' ? 260 : (tier === 'promind' ? 320 : 280);
+    parts.push('<ellipse cx="980" cy="' + glowY + '" rx="' + glowW +
+      '" ry="22" fill="' + meta.skyHorizon + '" opacity="0.35"/>');
+    if (meta.sun) {
+      parts.push('<circle cx="' + meta.sun.x + '" cy="' + meta.sun.y +
+        '" r="' + (meta.sun.r + 14) + '" fill="' + meta.sun.fill + '" opacity="0.22"/>');
+      parts.push('<circle cx="' + meta.sun.x + '" cy="' + meta.sun.y +
+        '" r="' + meta.sun.r + '" fill="' + meta.sun.fill + '"/>');
+    }
+    parts.push('<g class="hrl-tierHero-scene hrl-tierHero-' + esc(tier) + '">');
+    parts.push(fillHeroTokens(sceneOf(tier, meta), hid));
+    parts.push('</g>');
+    overlay = heroOverlay(opts);
+    if (overlay) parts.push(overlay);
+    title = opts.title || meta.title;
+    desc = opts.desc || meta.desc;
+    return wrapSvg('tierHero', opts, W, H, title, desc, parts.join(''));
+  }
+
+  /* ------------------------------------------------------------------ */
   /* Export                                                              */
   /* ------------------------------------------------------------------ */
 
@@ -2404,7 +3008,8 @@
     scaleGauge: scaleGauge,
     radar: radar,
     bar: bar,
-    timeline: timeline
+    timeline: timeline,
+    tierHero: tierHero
   };
 
   root.HRL_SVG = api;

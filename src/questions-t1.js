@@ -556,6 +556,100 @@
       explain: 'The pathways scale the diamond on different schedules. A 13-year-old on 90-foot Little League Junior bases is playing a different game from a 13-year-old on 70-foot Baseball Canada 13U bases. Ask which pathway and division you are in before you judge the field.',
       source: 'field-dimensions-by-division'
     },
+    {
+      id: 'q0216',
+      chapter: 'ch02',
+      tier: 'rookie',
+      topic: 'field',
+      difficulty: 6,
+      type: 'scenario',
+      prompt: 'A ground ball first bounces on the infield dirt in fair territory, then rolls across the first-base line into foul ground before it reaches first base. It comes to rest in foul territory. Nobody has touched it. What is the call?',
+      choices: [
+        'Fair — once a ball lands in fair territory it stays fair, no matter where it rolls',
+        'Fair — any ball that touches infield dirt is automatically in play',
+        'Foul — a bounding ball that leaves fair territory before it passes first or third is foul',
+        'Dead ball, replayed as a no-pitch, because the ball changed territories'
+      ],
+      answer: 2,
+      explain: 'On a bounding ball the fair/foul call is not “where it first bounced.” Between home and first or third, the umpire waits until the ball is touched, comes to rest, or passes the base. This one rolled foul before first, so it is foul. The matching trap: if that same hopper had bounded past first still in fair territory, it would stay fair even if it then rolled foul in the outfield.',
+      source: 'field-dimensions-by-division'
+    },
+    {
+      id: 'q0217',
+      chapter: 'ch02',
+      tier: 'rookie',
+      topic: 'field',
+      difficulty: 3,
+      type: 'mc',
+      prompt: 'The poles at the ends of the foul lines are called foul poles. Where do they actually sit, and what is a fly ball that strikes one?',
+      choices: [
+        'They sit in fair territory. A fly that hits a foul pole is fair — a home run.',
+        'They sit in foul territory. That is why they are called foul poles, and a fly that hits one is foul.',
+        'They sit on neither side. A ball that hits a pole is a dead-ball no-pitch and the at-bat is replayed.',
+        'The left-field pole is fair; the right-field pole is foul, because right field is the “foul” side for a right-handed batter.'
+      ],
+      answer: 0,
+      explain: 'The name is the trap. Each pole is the outfield end of a foul line, and the lines themselves are fair, so the poles are fair. A fly ball that strikes one is a home run. Do not wait to see where it caroms; the pole has already made the call.',
+      source: 'field-dimensions-by-division'
+    },
+    {
+      id: 'q0218',
+      chapter: 'ch02',
+      tier: 'rookie',
+      topic: 'field',
+      difficulty: 4,
+      type: 'mc',
+      prompt: 'Little League Intermediate (50-70) and Baseball Canada 13U both use 70-foot base paths. How far is the pitching rubber from home on each diamond?',
+      choices: [
+        'Both use 46 feet — the same mound as Little League Major',
+        'Both use 60 feet 6 inches — 70-foot bases always pair with a full adult mound',
+        'Intermediate uses 48 feet; Baseball Canada 13U uses 50 feet',
+        'Intermediate uses 50 feet; Baseball Canada 13U uses 48 feet'
+      ],
+      answer: 3,
+      explain: 'Same base paths do not mean the same mound. Little League Intermediate is 70 feet / 50 feet (8-inch mound). Baseball Canada 13U is 70 feet / 48 feet (raised 6 inches, up to 8). The 50-70 name is the giveaway for Intermediate. Do not import the Little League Major 46-foot rubber, or the adult 60-foot-6-inch rubber, onto a 70-foot diamond.',
+      source: 'field-dimensions-by-division'
+    },
+    {
+      id: 'q0219',
+      chapter: 'ch02',
+      tier: 'rookie',
+      topic: 'field',
+      difficulty: 3,
+      type: 'mc',
+      prompt: 'When the pitcher starts the motion, where must the batter\'s feet be?',
+      choices: [
+        'At least one foot in the batter\'s box; the other may rest on home plate',
+        'Both feet in the batter\'s box. A foot on the line of the box is still in the box; a foot on the plate is not.',
+        'Anywhere the bat can reach the plate, including a step into the catcher\'s box',
+        'One foot in each batter\'s box, so the stance straddles home'
+      ],
+      answer: 1,
+      explain: 'The two rectangles beside the plate are the only legal hitting stance. Both feet have to be in the box — including on its lines — when the pitcher starts. A foot on the plate, or a step out without time, is illegal. The catcher\'s box is behind the plate, not a hitting stance.',
+      source: 'field-dimensions-by-division'
+    },
+    {
+      id: 'q0220',
+      chapter: 'ch02',
+      tier: 'rookie',
+      topic: 'field',
+      difficulty: 2,
+      type: 'hotspot',
+      prompt: 'This diamond is viewed from behind home plate. Tap the left-field foul pole.',
+      diagram: {
+        svg: 'field',
+        opts: {
+          preset: 'major-ll',
+          labels: false,
+          title: 'Tap the left-field foul pole',
+          desc: 'A youth baseball diamond viewed from behind home. Tap the foul pole at the end of the third-base line.',
+          hotspots: ['home', 'first', 'third', 'mound', 'backstop', 'foul-pole-left', 'foul-pole-right']
+        }
+      },
+      targets: ['foul-pole-left'],
+      explain: 'From behind home, third base is to the left and first is to the right. The left-field foul pole is the tall marker where the third-base foul line meets the outfield fence. Despite the name, that pole sits in fair territory.',
+      source: 'field-dimensions-by-division'
+    },
 
     /* ------------------------------------------------------------ */
     /* ch03 — The Nine Positions                                     */
