@@ -348,7 +348,11 @@ test('mergeState keeps the higher best score and a completed chapter, without mu
 // ---------------------------------------------------------------------------
 console.log('\n----------------------------------------');
 console.log('Results: ' + passed + ' passed, ' + failed + ' failed');
-if (failed > 0) {
+// When run under tests/run-all.js, report into the shared tally instead of
+// exiting — an exit here would truncate the rest of the suite.
+if (global.__HRL_TEST_RUNNER && typeof global.__HRL_TEST_RUNNER.record === 'function') {
+  global.__HRL_TEST_RUNNER.record(path.basename(__filename), passed, failed);
+} else if (failed > 0) {
   process.exit(1);
 } else {
   console.log('All tests passed.');
