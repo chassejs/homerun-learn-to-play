@@ -145,6 +145,35 @@ to app code, styles, or content, bump instead — that is the case the hook
 exists for, and skipping it is how two different builds end up sharing a
 version number.
 
+## Deploying deliberately
+
+Deploys are metered. Across this Netlify account the six no-build sites
+averaged **2.0 deploys per work session** — 100 deploys for 51 sessions of
+actual work. The second deploy in a session is almost always "deployed,
+noticed something, deployed again", which means the thing noticed could have
+been caught before deploying.
+
+**The rule: one deploy per work session, at the end.**
+
+Before deploying, run:
+
+```
+npm run preflight
+```
+
+It runs the test suite, checks that every version record agrees, checks that
+`sw.js`'s cache name carries the current `BUILD_ID` (without which the deploy
+does not invalidate anything), confirms every file `index.html` and `sw.js`
+reference actually exists, and flags images larger than they render. Each of
+those checks exists because that exact defect previously cost a second deploy.
+
+`./deploy.sh` runs preflight itself and refuses to deploy if it fails, so the
+gate is not something you can forget.
+
+**Push freely, deploy deliberately.** Committing and pushing costs nothing;
+the deploy is the metered act. Batch a session's work behind a single version
+bump rather than bumping per fix.
+
 ## Backup schema (`DATA_VERSION`)
 
 `DATA_VERSION` is independent of `APP_VERSION`. A cosmetic or

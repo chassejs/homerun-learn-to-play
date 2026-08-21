@@ -28,5 +28,16 @@ if (pkg.version !== app + ".0" || ver.version !== app) {
 }
 '
 
+# Preflight. Every check in here encodes a defect that previously cost a second
+# deploy. Across this account deploys averaged 2.0 per work session; the second
+# one is almost always something that could have been caught locally.
+node scripts/preflight.mjs || {
+  echo ""
+  echo "deploy: preflight failed — not deploying."
+  echo "        Fix the failures above. Deploying now would cost a second deploy."
+  exit 1
+}
+
+echo ""
 netlify deploy --prod --dir . \
   --message "$(git log -1 --pretty=%s 2>/dev/null || echo 'manual deploy')"
