@@ -4,6 +4,12 @@
 
 Numbering scheme: a minor update adds 0.1; a major update adds 1.0 and resets the minor to 0.
 
+## 1.2 — 2026-08-20
+
+- Each of the six tiers now opens with its own photograph — an empty diamond at first light for Rookie, a dusk grandstand for Pro Mind — instead of a drawn placeholder.
+- Updates now reach you reliably. `sw.js` is cache-first with a fixed cache name, so a deploy that left it byte-identical kept returning visitors on the old precache indefinitely. The cache name now carries `BUILD_ID`, which the bump script rewrites every release, forcing a fresh install and dropping the stale cache.
+- The illustrated `tierHero` banners remain as the fallback, so a chapter still opens correctly if an image cannot load.
+
 ## 1.1 — 2026-08-20
 
 - A feedback button now sits in the corner of every screen, so you can report a wrong answer or a confusing lesson without leaving the page you are on.

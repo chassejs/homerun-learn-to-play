@@ -27,6 +27,7 @@ const versionJsPath = join(root, 'version.js');
 const packageJsonPath = join(root, 'package.json');
 const versionJsonPath = join(root, 'version.json');
 const changelogPath = join(root, 'changelog.js');
+const swPath = join(root, 'sw.js');
 
 // Load-bearing shapes — tests/version.test.js and .githooks/pre-push
 // parse the same literals. Keep these in lockstep with both.
@@ -37,6 +38,14 @@ const BUILD_TIME_RE = /^(  var BUILD_TIME = ')([^']+)(';)$/m;
 const APP_VERSION_SHAPE = "  var APP_VERSION = '<major>.<minor>';";
 const BUILD_ID_SHAPE = "  var BUILD_ID = '<id>';";
 const BUILD_TIME_SHAPE = "  var BUILD_TIME = '<ISO-8601>';";
+
+// The service worker is cache-first with a fixed cache name, so a deploy that
+// does not change sw.js leaves returning visitors on the old precache
+// indefinitely. Stamping BUILD_ID into the cache name changes sw.js on every
+// bump, which forces a fresh install and lets the activate handler drop the
+// stale cache. This is what makes a deploy self-invalidating.
+const SW_CACHE_RE = /^(const CACHE = 'homerun-learn-)([^']+)(';)$/m;
+const SW_CACHE_SHAPE = "const CACHE = 'homerun-learn-<build id>';";
 
 const args = process.argv.slice(2);
 const majorBump = args.indexOf('--major') !== -1;
@@ -200,6 +209,22 @@ nextVersionJson.released = released;
 nextVersionJson.buildId = buildId;
 nextVersionJson.buildTime = buildTime;
 
+let swSource;
+try {
+  swSource = readFileSync(swPath, 'utf8');
+} catch {
+  fail('bump-version: cannot read sw.js. Changing nothing.');
+}
+if (!SW_CACHE_RE.test(swSource)) {
+  fail(
+    'bump-version: could not find the cache-name line in sw.js.\n' +
+      'Expected exactly:\n\n  ' + SW_CACHE_SHAPE + '\n\n' +
+      'That line is rewritten on every bump so a deploy invalidates the old\n' +
+      'precache. Restore its shape before bumping. Changing nothing.',
+  );
+}
+const nextSw = swSource.replace(SW_CACHE_RE, `$1${buildId}$3`);
+
 var transition = 'bump-version: ' + previous + ' → ' + next +
   ' (build ' + buildId + ', released ' + released + ')';
 if (dryRun) transition += ' [dry-run]';
@@ -210,6 +235,7 @@ if (dryRun) {
   console.log('bump-version: would update version.js APP_VERSION, BUILD_ID, BUILD_TIME');
   console.log('bump-version: would update package.json version → ' + pkgVersion);
   console.log('bump-version: would update version.json version, released, buildId, buildTime');
+  console.log('bump-version: would update sw.js cache name → homerun-learn-' + buildId);
   if (!changelogHas(next)) {
     console.error(missingNotesMessage(next, released));
     console.error('No files were written (--dry-run).');
@@ -222,6 +248,7 @@ if (dryRun) {
 writeFileSync(versionJsPath, nextVersionJs);
 writeFileSync(packageJsonPath, JSON.stringify(nextPkg, null, 2) + '\n');
 writeFileSync(versionJsonPath, JSON.stringify(nextVersionJson, null, 2) + '\n');
+writeFileSync(swPath, nextSw);
 
 if (!changelogHas(next)) {
   console.error(missingNotesMessage(next, released));

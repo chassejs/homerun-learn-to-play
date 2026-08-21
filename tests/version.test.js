@@ -199,6 +199,32 @@ test('version.json buildTime matches version.js BUILD_TIME', function () {
   assertEqual(versionJson.buildTime, HRL_VERSION.BUILD_TIME, 'buildTime');
 });
 
+// ---------------------------------------------------------------------------
+// Service-worker cache invalidation.
+// sw.js is cache-first with a fixed cache name, so a deploy that leaves sw.js
+// byte-identical keeps returning visitors on the old precache forever. The
+// bump script stamps BUILD_ID into the cache name to force a fresh install.
+// If these drift apart, deploys silently stop invalidating — assert the link.
+// ---------------------------------------------------------------------------
+console.log('\nservice worker cache invalidation');
+
+const swSource = fs.readFileSync(path.join(__dirname, '..', 'sw.js'), 'utf8');
+const SW_CACHE_RE = /^(const CACHE = 'homerun-learn-)([^']+)(';)$/m;
+
+test('sw.js cache name matches the bump-script regex', function () {
+  assertEqual(SW_CACHE_RE.test(swSource), true, 'SW_CACHE_RE');
+});
+
+test('sw.js cache name carries the current BUILD_ID', function () {
+  const m = swSource.match(SW_CACHE_RE);
+  assertEqual(m && m[2], HRL_VERSION.BUILD_ID, 'sw.js cache build id');
+});
+
+test('sw.js still excludes /version.json from the precache', function () {
+  const list = swSource.match(/const ASSETS = \[([\s\S]*?)\];/)[1];
+  assertEqual(list.indexOf('/version.json') === -1, true, 'version.json must not be precached');
+});
+
 console.log('\n----------------------------------------');
 console.log('Results: ' + passed + ' passed, ' + failed + ' failed');
 if (global.__HRL_TEST_RUNNER && typeof global.__HRL_TEST_RUNNER.record === 'function') {

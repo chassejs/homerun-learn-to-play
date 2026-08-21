@@ -10,6 +10,19 @@ window.HRL_CHANGELOG = (function () {
 
   return [
     {
+      version: '1.2',
+      date: '2026-08-20',
+      type: 'minor',
+      title: 'Photography for every tier',
+      highlights: [
+        'Each of the six tiers now opens with its own photograph — an empty diamond at first light for Rookie, a dusk grandstand for Pro Mind — instead of a drawn placeholder.',
+        'Updates now reach you reliably. The app was able to keep serving a previously saved copy of itself after a new version shipped; it no longer can.'
+      ],
+      fixes: [
+        'The illustrated banners remain as a fallback, so a chapter still opens correctly if an image cannot load.'
+      ]
+    },
+    {
       version: '1.1',
       date: '2026-08-20',
       type: 'minor',

@@ -1,6 +1,15 @@
 // NOTE: /version.json is deliberately NOT precached — it is the freshness
 // probe the update self-check reads, and must always come from the network.
-const CACHE = 'homerun-learn-v1';
+// The cache name carries BUILD_ID. scripts/bump-version.mjs rewrites this
+// line on every bump, which is what makes a deploy self-invalidating: a
+// changed sw.js triggers a fresh install (re-running addAll against the
+// network) and the activate handler then deletes every older cache.
+// Without it, this cache-first worker would serve a stale build forever.
+const CACHE = 'homerun-learn-1f1fa939ce';
+// The six brand/hero-tier-*.jpg banners are deliberately NOT precached: they
+// total ~3 MB, which is a poor trade against a lean install on a phone. Online
+// they load normally; offline the <img> fails and learn.js swaps in the
+// tierHero SVG banner, so a chapter still opens correctly either way.
 const ASSETS = [
   '/',
   '/index.html',
