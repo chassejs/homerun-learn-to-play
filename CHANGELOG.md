@@ -4,6 +4,11 @@
 
 Numbering scheme: a minor update adds 0.1; a major update adds 1.0 and resets the minor to 0.
 
+## 1.3 — 2026-08-20
+
+- Chapter photographs load about three times faster. The tier heroes render at 256px wide but shipped at 1792px — 7x oversized, ~500 KB each to paint a thumbnail. Resized to 1200px (still ~4.7x the render size, so there is headroom if the layout ever goes full-width), cutting the set from 3.0 MB to 1.1 MB with no visible quality change.
+- Full-resolution masters are preserved in `brand/source/hero-tier-N-master.jpg`.
+
 ## 1.2 — 2026-08-20
 
 - Each of the six tiers now opens with its own photograph — an empty diamond at first light for Rookie, a dusk grandstand for Pro Mind — instead of a drawn placeholder.

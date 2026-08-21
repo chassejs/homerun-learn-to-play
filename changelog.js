@@ -10,6 +10,15 @@ window.HRL_CHANGELOG = (function () {
 
   return [
     {
+      version: '1.3',
+      date: '2026-08-20',
+      type: 'minor',
+      title: 'Faster chapter loading',
+      highlights: [
+        'Chapter photographs load about three times faster, especially on a phone or a slow connection. They looked the same as before — the files were simply far larger than the space they are shown in.'
+      ]
+    },
+    {
       version: '1.2',
       date: '2026-08-20',
       type: 'minor',
