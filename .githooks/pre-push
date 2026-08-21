@@ -1,0 +1,74 @@
+#!/bin/sh
+# ===================================================================
+# Homerun Learn to Play — .githooks/pre-push
+# Refuse a push to main that does not increase APP_VERSION.
+#
+# Why a check rather than an automatic bump: git has already decided
+# which refs to send by the time pre-push runs, so a commit created
+# here would sit unpushed and the very next push would fail. The hook
+# blocks; `npm run bump` (or `npm run bump:major`) does the edit.
+#
+# Installed via core.hooksPath (set by the `prepare` npm script).
+# To wire it up by hand: git config core.hooksPath .githooks
+# ===================================================================
+
+ZERO='0000000000000000000000000000000000000000'
+VERSION_FILE='version.js'
+
+# Read `var APP_VERSION = '<major>.<minor>';` from the committed file.
+# Exactly two spaces of indent — the same shape the bump script writes
+# and that tests/version.test.js asserts — so comment examples cannot match.
+version_at() {
+  blob=$(git show "$1:$VERSION_FILE" 2>/dev/null) || return 1
+  value=$(printf '%s' "$blob" | sed -n "s/^  var APP_VERSION = '\([0-9][0-9]*\.[0-9][0-9]*\)';.*/\1/p" | head -n 1)
+  [ -z "$value" ] && return 1
+  printf '%s' "$value"
+}
+
+# True (exit 0) if version $1 is strictly greater than version $2, comparing
+# major and minor as integers — not floats, so 1.10 correctly beats 1.9.
+version_gt() {
+  awk -v a="$1" -v b="$2" '
+    BEGIN {
+      split(a, av, "."); split(b, bv, ".");
+      if (av[1]+0 != bv[1]+0) { exit !(av[1]+0 > bv[1]+0) }
+      exit !(av[2]+0 > bv[2]+0)
+    }'
+}
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$remote_ref" = 'refs/heads/main' ] || continue
+  [ "$local_sha" = "$ZERO" ] && continue          # branch deletion
+
+  new_version=$(version_at "$local_sha") || {
+    echo "pre-push: cannot read APP_VERSION from $VERSION_FILE in the commit being pushed." >&2
+    echo "          Restore  var APP_VERSION = '<major>.<minor>';  — the release stamp depends on it." >&2
+    exit 1
+  }
+
+  if [ "$remote_sha" = "$ZERO" ]; then            # creating main
+    echo "pre-push: new branch — version $new_version accepted."
+    continue
+  fi
+
+  old_version=$(version_at "$remote_sha") || {
+    # Unreadable remote side (shallow clone, pre-this-scheme history, object
+    # not fetched). Warn rather than block: failing to *check* is not
+    # evidence of a missing bump.
+    echo "pre-push: could not read the previous APP_VERSION — skipping the check."
+    continue
+  }
+
+  if ! version_gt "$new_version" "$old_version"; then
+    echo "pre-push: BLOCKED — the version must increase on every push to main." >&2
+    echo "          origin/main is at $old_version; this push is $new_version." >&2
+    echo >&2
+    echo "          npm run bump && git commit -a --amend --no-edit" >&2
+    echo "            (or commit the bump separately, then push again)" >&2
+    exit 1
+  fi
+
+  echo "pre-push: $old_version → $new_version."
+done
+
+exit 0

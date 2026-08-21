@@ -10,6 +10,7 @@ window.HRL_APP_UPDATES = (function () {
   var PRE_UPDATE_BACKUP_KEY = 'homerun-learn/progress/v1.backup-pre-update';
   var LAST_SEEN_KEY = 'homerun-learn/lastSeenVersion';
   var DEFER_KEY = 'homerun-learn/updateDeferred';
+  var DEFER_BUILD_KEY = 'homerun-learn/updateDeferredBuild';
   var CHECK_INTERVAL_MS = 30 * 60 * 1000;
   var FIRST_CHECK_DELAY_MS = 2000;
   var RELOAD_SAFETY_MS = 4000;
@@ -19,6 +20,10 @@ window.HRL_APP_UPDATES = (function () {
 
   function getAppVersion() {
     return (window.HRL_VERSION && window.HRL_VERSION.APP_VERSION) || 'unknown';
+  }
+
+  function getBuildId() {
+    return (window.HRL_VERSION && window.HRL_VERSION.BUILD_ID) || '';
   }
 
   function lsGet(key) {
@@ -57,6 +62,19 @@ window.HRL_APP_UPDATES = (function () {
     if (av.major !== bv.major) return av.major > bv.major ? 1 : -1;
     if (av.minor !== bv.minor) return av.minor > bv.minor ? 1 : -1;
     return 0;
+  }
+
+  // True when the deployed build differs from the running one.
+  //
+  // Identity comparison, never ordering: build ids are opaque stamps, not
+  // sortable versions, and a rollback is as much a mismatch as a
+  // roll-forward. Absent, empty, or non-string values are "no information"
+  // and never report staleness, so a failed or malformed check stays silent
+  // rather than a spurious "update available".
+  function isStaleBuild(deployedBuildId, runningBuildId) {
+    if (typeof deployedBuildId !== 'string' || deployedBuildId === '') return false;
+    if (typeof runningBuildId !== 'string' || runningBuildId === '') return false;
+    return deployedBuildId !== runningBuildId;
   }
 
   function findChangelogEntry(version) {
@@ -166,6 +184,20 @@ window.HRL_APP_UPDATES = (function () {
     } catch (e) {}
   }
 
+  function getDeferredBuildId() {
+    try {
+      return sessionStorage.getItem(DEFER_BUILD_KEY);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function setDeferredBuildId(buildId) {
+    try {
+      sessionStorage.setItem(DEFER_BUILD_KEY, buildId);
+    } catch (e) {}
+  }
+
   function logCheckSkip() {
     if (updateCheckInfoLogged) return;
     updateCheckInfoLogged = true;
@@ -250,7 +282,7 @@ window.HRL_APP_UPDATES = (function () {
     Promise.all([cachePromise, swPromise]).then(reload).catch(reload);
   }
 
-  function showUpdateModal(remote, local) {
+  function showUpdateModal(remote, local, remoteBuildId) {
     if (!window.HRL_MODAL || typeof window.HRL_MODAL.open !== 'function') return;
     window.HRL_MODAL.open({
       title: 'Update available',
@@ -268,6 +300,9 @@ window.HRL_APP_UPDATES = (function () {
         var now = api.el('button', { type: 'button', text: 'Update now' });
         later.addEventListener('click', function () {
           setDeferredVersion(remote);
+          if (typeof remoteBuildId === 'string' && remoteBuildId) {
+            setDeferredBuildId(remoteBuildId);
+          }
           api.close();
         });
         now.addEventListener('click', function () {
@@ -293,12 +328,16 @@ window.HRL_APP_UPDATES = (function () {
       if (!response || !response.ok) return null;
       return response.json();
     }).then(function (data) {
-      if (!data || !data.version) return;
+      if (!data || typeof data !== 'object') return;
+      if (!data.version) return;
       var remote = data.version;
       var local = getAppVersion();
-      if (compareVersions(remote, local) !== 1) return;
-      if (getDeferredVersion() === remote) return;
-      showUpdateModal(remote, local);
+      var versionNewer = compareVersions(remote, local) === 1;
+      var staleBuild = isStaleBuild(data.buildId, getBuildId());
+      if (!versionNewer && !staleBuild) return;
+      if (versionNewer && getDeferredVersion() === remote) return;
+      if (!versionNewer && staleBuild && getDeferredBuildId() === data.buildId) return;
+      showUpdateModal(remote, local, data.buildId);
     }).catch(function () {
       logCheckSkip();
     });
@@ -328,6 +367,7 @@ window.HRL_APP_UPDATES = (function () {
   return {
     checkForUpdate: checkForUpdate,
     showWhatsNew: showWhatsNew,
-    compareVersions: compareVersions
+    compareVersions: compareVersions,
+    isStaleBuild: isStaleBuild
   };
 }());

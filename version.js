@@ -7,14 +7,26 @@
    - Bump DATA_VERSION only when the shape of the exported JSON changes
      in a way that could break a restore. See docs/VERSIONING.md.
    - Keep package.json "version" in sync with APP_VERSION (major.minor.0).
+   - `npm run bump` maintains APP_VERSION, BUILD_ID, BUILD_TIME, package.json
+     and version.json together. Do not edit them by hand.
+   - The three `var APP_VERSION/BUILD_ID/BUILD_TIME = '...';` lines below are
+     parsed as TEXT by scripts/bump-version.mjs and .githooks/pre-push.
+     Keep their exact literal shape or that tooling breaks.
    =================================================================== */
 
-// Expose on window so practice.js and versionCompat.js can read without ES modules.
+// Exposed on window so the rest of the app can read it without ES modules.
 window.HRL_VERSION = (function () {
   'use strict';
 
   // Human-facing release label shown in the UI and embedded in every backup.
   var APP_VERSION = '1.0';
+
+  // Identity of this specific build. Unlike APP_VERSION it changes on every
+  // bump, so the update check can spot a redeploy even at the same label.
+  var BUILD_ID = 'ead1c37c10';
+
+  // When this build was stamped, ISO-8601 UTC.
+  var BUILD_TIME = '2026-08-21T01:54:56Z';
 
   // Governs backup/restore compatibility. Incremented independently of
   // APP_VERSION when the exported JSON payload shape changes.
@@ -26,6 +38,8 @@ window.HRL_VERSION = (function () {
 
   return {
     APP_VERSION: APP_VERSION,
+    BUILD_ID: BUILD_ID,
+    BUILD_TIME: BUILD_TIME,
     DATA_VERSION: DATA_VERSION,
     MIN_COMPATIBLE_DATA_VERSION: MIN_COMPATIBLE_DATA_VERSION
   };

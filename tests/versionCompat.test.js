@@ -287,6 +287,19 @@ test('changelog.js entries are well-formed and ordered newest-first', function (
   }
 });
 
+test('version.json carries a non-empty string buildId and a parseable buildTime', function () {
+  const data = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'version.json'), 'utf8'));
+  assertEqual(typeof data.buildId === 'string' && data.buildId.length > 0, true, 'version.json buildId');
+  assertEqual(typeof data.buildTime === 'string' && data.buildTime.length > 0, true, 'version.json buildTime type');
+  assertEqual(Number.isNaN(Date.parse(data.buildTime)), false, 'version.json buildTime parseable (' + data.buildTime + ')');
+});
+
+test('version.json buildId equals version.js BUILD_ID', function () {
+  const data = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'version.json'), 'utf8'));
+  const api = versionFn(versionSandbox);
+  assertEqual(data.buildId, api.BUILD_ID, 'version.json buildId vs version.js BUILD_ID');
+});
+
 // ---------------------------------------------------------------------------
 // Summary
 // ---------------------------------------------------------------------------
