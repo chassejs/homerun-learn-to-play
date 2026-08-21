@@ -1,0 +1,14 @@
+ .githooks/pre-push          |  74 ++++++++++++++
+ appUpdates.js               |  52 ++++++++--
+ deploy.sh                   |  25 +++++
+ docs/VERSIONING.md          | 142 +++++++++++++++++++++++++++
+ feedback.js                 | 189 +++++++++++++++++++++++++++++++++---
+ index.html                  |   1 +
+ scripts/bump-version.mjs    | 231 ++++++++++++++++++++++++++++++++++++++++++++
+ shell.js                    |   6 ++
+ styles.css                  |  81 +++++++++++++++-
+ tests/version.test.js       | 210 ++++++++++++++++++++++++++++++++++++++++
+ tests/versionCompat.test.js |  13 +++
+ version.js                  |  16 ++-
+ version.json                |   4 +-
+ 13 files changed, 1019 insertions(+), 25 deletions(-)

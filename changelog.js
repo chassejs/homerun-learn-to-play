@@ -10,6 +10,21 @@ window.HRL_CHANGELOG = (function () {
 
   return [
     {
+      version: '1.1',
+      date: '2026-08-20',
+      type: 'minor',
+      title: 'Version tracking and one-tap feedback',
+      highlights: [
+        'A feedback button now sits in the corner of every screen, so you can report a wrong answer or a confusing lesson without leaving the page you are on.',
+        'The feedback form knows where you were — it pre-fills the screen you came from, and names the chapter when you are reading one.',
+        'The app now checks for a newer version when you open it and after it has been sitting in the background, and offers to reload.',
+        'A new version tells you what changed the first time you open it, and the full history stays available under Version history.'
+      ],
+      fixes: [
+        'Reports now carry the exact build you were running, so a problem can be traced to the version that had it.'
+      ]
+    },
+    {
       version: '1.0',
       date: '2026-08-19',
       type: 'major',

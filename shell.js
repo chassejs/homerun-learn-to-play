@@ -923,6 +923,12 @@ window.HRL_SHELL = (function () {
     if (P && typeof P.storageAvailable === 'function' && !P.storageAvailable()) {
       showStorageNotice();
     }
+
+    if (window.HRL_FEEDBACK && typeof window.HRL_FEEDBACK.mount === 'function') {
+      try {
+        window.HRL_FEEDBACK.mount();
+      } catch (err) {}
+    }
   }
 
   if (typeof document !== 'undefined') {

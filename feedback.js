@@ -24,12 +24,94 @@ window.HRL_FEEDBACK = (function () {
     { value: 'other', label: 'Other' }
   ];
 
+  var CONTEXTS = [
+    { value: 'home', label: 'Home' },
+    { value: 'path', label: 'My Path' },
+    { value: 'chapter', label: 'A chapter' },
+    { value: 'quiz', label: 'A chapter quiz' },
+    { value: 'iq', label: 'Baseball IQ test' },
+    { value: 'review', label: 'Review deck' },
+    { value: 'glossary', label: 'Glossary' },
+    { value: 'help', label: 'Help & Guide' },
+    { value: 'other', label: 'Somewhere else' }
+  ];
+
   function trim(s) {
     return String(s == null ? '' : s).replace(/^\s+|\s+$/g, '');
   }
 
   function appVersion() {
-    return (window.HRL_VERSION && window.HRL_VERSION.APP_VERSION) || 'unknown';
+    var ver;
+    try {
+      ver = window.HRL_VERSION && window.HRL_VERSION.APP_VERSION;
+    } catch (err) {
+      ver = null;
+    }
+    return ver ? String(ver) : 'unknown';
+  }
+
+  function buildId() {
+    var id;
+    try {
+      id = window.HRL_VERSION && window.HRL_VERSION.BUILD_ID;
+    } catch (err) {
+      id = null;
+    }
+    return id ? String(id) : 'unknown';
+  }
+
+  function contextLabelFor(value) {
+    var i;
+    for (i = 0; i < CONTEXTS.length; i++) {
+      if (CONTEXTS[i].value === value) return CONTEXTS[i].label;
+    }
+    return 'Somewhere else';
+  }
+
+  function contextValueFromView(viewName) {
+    var i;
+    if (!viewName) return 'other';
+    for (i = 0; i < CONTEXTS.length; i++) {
+      if (CONTEXTS[i].value === viewName) return CONTEXTS[i].value;
+    }
+    return 'other';
+  }
+
+  function currentContextValue() {
+    var view = '';
+    try {
+      if (window.HRL_SHELL && typeof window.HRL_SHELL.current === 'function') {
+        view = window.HRL_SHELL.current();
+      }
+    } catch (err) {
+      view = '';
+    }
+    return contextValueFromView(view);
+  }
+
+  function currentChapterTitle(contextValue) {
+    var rootId;
+    var root;
+    var heading;
+    var text;
+    if (typeof document === 'undefined') return '';
+    if (contextValue === 'chapter') rootId = 'view-chapter';
+    else if (contextValue === 'quiz') rootId = 'view-quiz';
+    else return '';
+    root = document.getElementById(rootId);
+    if (!root) return '';
+    heading = root.querySelector('h2');
+    if (!heading) return '';
+    text = trim(heading.textContent || heading.innerText || '');
+    if (!text) return '';
+    if (contextValue === 'chapter' && text === 'Chapter') return '';
+    if (contextValue === 'quiz' && text === 'Chapter quiz') return '';
+    return text;
+  }
+
+  function whereLine(contextLabel, chapterTitle) {
+    if (chapterTitle) return contextLabel + ', ' + chapterTitle;
+    return contextLabel;
   }
 
   function categoryLabel(value) {
@@ -68,31 +150,36 @@ window.HRL_FEEDBACK = (function () {
     return window.screen.width + 'x' + window.screen.height;
   }
 
-  function buildBody(rating, catLabel, details) {
+  function buildBody(rating, catLabel, details, contextLabel, chapterTitle) {
     var ratingLine;
+    var footer;
     if (!rating) {
       ratingLine = 'Rating: not rated';
     } else {
       ratingLine = 'Rating: ' + ratingStars(rating) + ' (' + rating + ' out of 5)';
     }
+    footer =
+      '---\n' +
+      'App version: ' + appVersion() + '\n' +
+      'Build: ' + buildId() + '\n' +
+      'Where: ' + whereLine(contextLabel, chapterTitle) + '\n' +
+      'Page: ' + pageLine() + '\n' +
+      'Device: ' + deviceLine() + '\n' +
+      'Screen: ' + screenLine() + '\n' +
+      'Sent: ' + new Date().toISOString();
     return (
       ratingLine + '\n' +
       'Category: ' + catLabel + '\n' +
       '\n' +
-      'What happened:\n' +
-      details + '\n' +
+      footer + '\n' +
       '\n' +
-      '---\n' +
-      'App version: ' + appVersion() + '\n' +
-      'Page: ' + pageLine() + '\n' +
-      'Device: ' + deviceLine() + '\n' +
-      'Screen: ' + screenLine() + '\n' +
-      'Sent: ' + new Date().toISOString()
+      'What happened:\n' +
+      details
     );
   }
 
-  function buildSubject(catLabel, rating) {
-    var subject = 'Homerun Learn to Play feedback — ' + catLabel;
+  function buildSubject(catLabel, rating, contextLabel) {
+    var subject = 'Homerun Learn to Play feedback — ' + catLabel + ' — ' + contextLabel;
     if (rating > 0) subject += ' — ' + rating + '/5';
     return subject;
   }
@@ -204,6 +291,8 @@ window.HRL_FEEDBACK = (function () {
         var lastErrorOn = null;
         var starButtons = [];
         var i;
+        var openedContext = currentContextValue();
+        var openedTitle = currentChapterTitle(openedContext);
 
         box.appendChild(api.el('p', {
           class: 'feedback-intro',
@@ -284,6 +373,19 @@ window.HRL_FEEDBACK = (function () {
 
         box.appendChild(api.el('div', { class: 'feedback-rating' }, [group, ratingLabel]));
 
+        var contextLabelEl = api.el('label', { for: 'feedback-context', text: 'Where in the app?' });
+        var contextEl = api.el('select', { id: 'feedback-context' });
+        for (i = 0; i < CONTEXTS.length; i++) {
+          var ctxAttrs = {
+            value: CONTEXTS[i].value,
+            text: CONTEXTS[i].label
+          };
+          if (CONTEXTS[i].value === openedContext) {
+            ctxAttrs.selected = true;
+          }
+          contextEl.appendChild(api.el('option', ctxAttrs));
+        }
+
         var catLabelEl = api.el('label', { for: 'feedback-category', text: 'What is this about?' });
         var categoryEl = api.el('select', { id: 'feedback-category' });
         for (i = 0; i < CATEGORIES.length; i++) {
@@ -343,6 +445,7 @@ window.HRL_FEEDBACK = (function () {
         });
 
         var form = api.el('form', { class: 'feedback-form' }, [
+          api.el('div', { class: 'feedback-field' }, [contextLabelEl, contextEl]),
           api.el('div', { class: 'feedback-field' }, [catLabelEl, categoryEl]),
           api.el('div', { class: 'feedback-field' }, [detailsLabel, detailsEl, counterEl]),
           errorEl,
@@ -362,8 +465,14 @@ window.HRL_FEEDBACK = (function () {
           }
 
           var catLabel = categoryLabel(categoryEl.value);
-          var subject = buildSubject(catLabel, rating);
-          var fullBody = buildBody(rating, catLabel, details);
+          var contextValue = contextEl.value || 'other';
+          var contextLabel = contextLabelFor(contextValue);
+          var chapterTitle = '';
+          if ((contextValue === 'chapter' || contextValue === 'quiz') && contextValue === openedContext) {
+            chapterTitle = openedTitle;
+          }
+          var subject = buildSubject(catLabel, rating, contextLabel);
+          var fullBody = buildBody(rating, catLabel, details, contextLabel, chapterTitle);
           var mailBody = fullBody;
           var truncated = false;
           if (fullBody.length > MAIL_BODY_LIMIT) {
@@ -385,7 +494,57 @@ window.HRL_FEEDBACK = (function () {
     });
   }
 
+  function fabIcon() {
+    var svg;
+    var path;
+    if (typeof document === 'undefined') return null;
+    svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('width', '20');
+    svg.setAttribute('height', '20');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('focusable', 'false');
+    svg.setAttribute('class', 'feedback-fab-icon');
+    path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('fill', 'currentColor');
+    path.setAttribute('d', 'M1.5 8.67v8.58a3 3 0 0 0 3 3h15a3 3 0 0 0 3-3V8.67l-8.928 5.493a3 3 0 0 1-3.144 0L1.5 8.67zM22.5 6.908V6.75a3 3 0 0 0-3-3h-15a3 3 0 0 0-3 3v.158l9.714 5.978a1.5 1.5 0 0 0 1.572 0L22.5 6.908z');
+    svg.appendChild(path);
+    return svg;
+  }
+
+  function mount() {
+    var root;
+    var btn;
+    var label;
+    var icon;
+    if (typeof document === 'undefined') return;
+    if (document.querySelector('.feedback-fab')) return;
+    root = document.getElementById('feedback-fab-root');
+    if (!root) root = document.body;
+    if (!root) return;
+
+    btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'feedback-fab no-print';
+    btn.setAttribute('aria-label', 'Send feedback');
+
+    icon = fabIcon();
+    if (icon) btn.appendChild(icon);
+
+    label = document.createElement('span');
+    label.className = 'feedback-fab-label';
+    label.textContent = 'Send feedback';
+    btn.appendChild(label);
+
+    btn.addEventListener('click', function () {
+      open();
+    });
+
+    root.appendChild(btn);
+  }
+
   return {
-    open: open
+    open: open,
+    mount: mount
   };
 }());

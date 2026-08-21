@@ -1,0 +1,1310 @@
+diff --git a/.githooks/pre-push b/.githooks/pre-push
+new file mode 100755
+index 0000000..7fb3ff0
+--- /dev/null
++++ b/.githooks/pre-push
+@@ -0,0 +1,74 @@
++#!/bin/sh
++# ===================================================================
++# Homerun Learn to Play — .githooks/pre-push
++# Refuse a push to main that does not increase APP_VERSION.
++#
++# Why a check rather than an automatic bump: git has already decided
++# which refs to send by the time pre-push runs, so a commit created
++# here would sit unpushed and the very next push would fail. The hook
++# blocks; `npm run bump` (or `npm run bump:major`) does the edit.
++#
++# Installed via core.hooksPath (set by the `prepare` npm script).
++# To wire it up by hand: git config core.hooksPath .githooks
++# ===================================================================
++
++ZERO='0000000000000000000000000000000000000000'
++VERSION_FILE='version.js'
++
++# Read `var APP_VERSION = '<major>.<minor>';` from the committed file.
++# Exactly two spaces of indent — the same shape the bump script writes
++# and that tests/version.test.js asserts — so comment examples cannot match.
++version_at() {
++  blob=$(git show "$1:$VERSION_FILE" 2>/dev/null) || return 1
++  value=$(printf '%s' "$blob" | sed -n "s/^  var APP_VERSION = '\([0-9][0-9]*\.[0-9][0-9]*\)';.*/\1/p" | head -n 1)
++  [ -z "$value" ] && return 1
++  printf '%s' "$value"
++}
++
++# True (exit 0) if version $1 is strictly greater than version $2, comparing
++# major and minor as integers — not floats, so 1.10 correctly beats 1.9.
++version_gt() {
++  awk -v a="$1" -v b="$2" '
++    BEGIN {
++      split(a, av, "."); split(b, bv, ".");
++      if (av[1]+0 != bv[1]+0) { exit !(av[1]+0 > bv[1]+0) }
++      exit !(av[2]+0 > bv[2]+0)
++    }'
++}
++
++while read -r local_ref local_sha remote_ref remote_sha; do
++  [ "$remote_ref" = 'refs/heads/main' ] || continue
++  [ "$local_sha" = "$ZERO" ] && continue          # branch deletion
++
++  new_version=$(version_at "$local_sha") || {
++    echo "pre-push: cannot read APP_VERSION from $VERSION_FILE in the commit being pushed." >&2
++    echo "          Restore  var APP_VERSION = '<major>.<minor>';  — the release stamp depends on it." >&2
++    exit 1
++  }
++
++  if [ "$remote_sha" = "$ZERO" ]; then            # creating main
++    echo "pre-push: new branch — version $new_version accepted."
++    continue
++  fi
++
++  old_version=$(version_at "$remote_sha") || {
++    # Unreadable remote side (shallow clone, pre-this-scheme history, object
++    # not fetched). Warn rather than block: failing to *check* is not
++    # evidence of a missing bump.
++    echo "pre-push: could not read the previous APP_VERSION — skipping the check."
++    continue
++  }
++
++  if ! version_gt "$new_version" "$old_version"; then
++    echo "pre-push: BLOCKED — the version must increase on every push to main." >&2
++    echo "          origin/main is at $old_version; this push is $new_version." >&2
++    echo >&2
++    echo "          npm run bump && git commit -a --amend --no-edit" >&2
++    echo "            (or commit the bump separately, then push again)" >&2
++    exit 1
++  fi
++
++  echo "pre-push: $old_version → $new_version."
++done
++
++exit 0
+diff --git a/appUpdates.js b/appUpdates.js
+index e8cd9bc..4646514 100644
+--- a/appUpdates.js
++++ b/appUpdates.js
+@@ -10,6 +10,7 @@ window.HRL_APP_UPDATES = (function () {
+   var PRE_UPDATE_BACKUP_KEY = 'homerun-learn/progress/v1.backup-pre-update';
+   var LAST_SEEN_KEY = 'homerun-learn/lastSeenVersion';
+   var DEFER_KEY = 'homerun-learn/updateDeferred';
++  var DEFER_BUILD_KEY = 'homerun-learn/updateDeferredBuild';
+   var CHECK_INTERVAL_MS = 30 * 60 * 1000;
+   var FIRST_CHECK_DELAY_MS = 2000;
+   var RELOAD_SAFETY_MS = 4000;
+@@ -21,6 +22,10 @@ window.HRL_APP_UPDATES = (function () {
+     return (window.HRL_VERSION && window.HRL_VERSION.APP_VERSION) || 'unknown';
+   }
+ 
++  function getBuildId() {
++    return (window.HRL_VERSION && window.HRL_VERSION.BUILD_ID) || '';
++  }
++
+   function lsGet(key) {
+     try {
+       return localStorage.getItem(key);
+@@ -59,6 +64,19 @@ window.HRL_APP_UPDATES = (function () {
+     return 0;
+   }
+ 
++  // True when the deployed build differs from the running one.
++  //
++  // Identity comparison, never ordering: build ids are opaque stamps, not
++  // sortable versions, and a rollback is as much a mismatch as a
++  // roll-forward. Absent, empty, or non-string values are "no information"
++  // and never report staleness, so a failed or malformed check stays silent
++  // rather than a spurious "update available".
++  function isStaleBuild(deployedBuildId, runningBuildId) {
++    if (typeof deployedBuildId !== 'string' || deployedBuildId === '') return false;
++    if (typeof runningBuildId !== 'string' || runningBuildId === '') return false;
++    return deployedBuildId !== runningBuildId;
++  }
++
+   function findChangelogEntry(version) {
+     var list = window.HRL_CHANGELOG;
+     var i;
+@@ -166,6 +184,20 @@ window.HRL_APP_UPDATES = (function () {
+     } catch (e) {}
+   }
+ 
++  function getDeferredBuildId() {
++    try {
++      return sessionStorage.getItem(DEFER_BUILD_KEY);
++    } catch (e) {
++      return null;
++    }
++  }
++
++  function setDeferredBuildId(buildId) {
++    try {
++      sessionStorage.setItem(DEFER_BUILD_KEY, buildId);
++    } catch (e) {}
++  }
++
+   function logCheckSkip() {
+     if (updateCheckInfoLogged) return;
+     updateCheckInfoLogged = true;
+@@ -250,7 +282,7 @@ window.HRL_APP_UPDATES = (function () {
+     Promise.all([cachePromise, swPromise]).then(reload).catch(reload);
+   }
+ 
+-  function showUpdateModal(remote, local) {
++  function showUpdateModal(remote, local, remoteBuildId) {
+     if (!window.HRL_MODAL || typeof window.HRL_MODAL.open !== 'function') return;
+     window.HRL_MODAL.open({
+       title: 'Update available',
+@@ -268,6 +300,9 @@ window.HRL_APP_UPDATES = (function () {
+         var now = api.el('button', { type: 'button', text: 'Update now' });
+         later.addEventListener('click', function () {
+           setDeferredVersion(remote);
++          if (typeof remoteBuildId === 'string' && remoteBuildId) {
++            setDeferredBuildId(remoteBuildId);
++          }
+           api.close();
+         });
+         now.addEventListener('click', function () {
+@@ -293,12 +328,16 @@ window.HRL_APP_UPDATES = (function () {
+       if (!response || !response.ok) return null;
+       return response.json();
+     }).then(function (data) {
+-      if (!data || !data.version) return;
++      if (!data || typeof data !== 'object') return;
++      if (!data.version) return;
+       var remote = data.version;
+       var local = getAppVersion();
+-      if (compareVersions(remote, local) !== 1) return;
+-      if (getDeferredVersion() === remote) return;
+-      showUpdateModal(remote, local);
++      var versionNewer = compareVersions(remote, local) === 1;
++      var staleBuild = isStaleBuild(data.buildId, getBuildId());
++      if (!versionNewer && !staleBuild) return;
++      if (versionNewer && getDeferredVersion() === remote) return;
++      if (!versionNewer && staleBuild && getDeferredBuildId() === data.buildId) return;
++      showUpdateModal(remote, local, data.buildId);
+     }).catch(function () {
+       logCheckSkip();
+     });
+@@ -328,6 +367,7 @@ window.HRL_APP_UPDATES = (function () {
+   return {
+     checkForUpdate: checkForUpdate,
+     showWhatsNew: showWhatsNew,
+-    compareVersions: compareVersions
++    compareVersions: compareVersions,
++    isStaleBuild: isStaleBuild
+   };
+ }());
+diff --git a/deploy.sh b/deploy.sh
+index 5aca101..2d89bf6 100755
+--- a/deploy.sh
++++ b/deploy.sh
+@@ -3,5 +3,30 @@ set -e
+ 
+ cd "$(dirname "$0")"
+ 
++# The normal path is `git push` (Netlify continuous deployment from main).
++# This script is the manual fallback.
++
++node -e '
++var fs = require("fs");
++var src = fs.readFileSync("version.js", "utf8");
++var m = src.match(/^  var APP_VERSION = '\''(\d+\.\d+)'\'';$/m);
++if (!m) {
++  console.error("deploy: could not read APP_VERSION from version.js");
++  console.error("deploy: restore  var APP_VERSION = '\''<major>.<minor>'\'';");
++  process.exit(1);
++}
++var app = m[1];
++var pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
++var ver = JSON.parse(fs.readFileSync("version.json", "utf8"));
++if (pkg.version !== app + ".0" || ver.version !== app) {
++  console.error("deploy: version mismatch. Aborting.");
++  console.error("  version.js APP_VERSION = " + app);
++  console.error("  package.json version   = " + pkg.version);
++  console.error("  version.json version   = " + ver.version);
++  console.error("They must agree (package.json is <major>.<minor>.0).");
++  process.exit(1);
++}
++'
++
+ netlify deploy --prod --dir . \
+   --message "$(git log -1 --pretty=%s 2>/dev/null || echo 'manual deploy')"
+diff --git a/docs/VERSIONING.md b/docs/VERSIONING.md
+new file mode 100644
+index 0000000..e8ea03c
+--- /dev/null
++++ b/docs/VERSIONING.md
+@@ -0,0 +1,142 @@
++# Versioning
++
++Homerun Learn to Play ships as a static site with no build step. A push to
++`main` is a deploy, so every deploy must carry a distinguishable version.
++`npm run bump` is the one-command stamp; `.githooks/pre-push` refuses a
++push to `main` that skips it.
++
++## What each constant means
++
++All of these live in `version.js` (`window.HRL_VERSION`). `npm run bump`
++maintains `APP_VERSION`, `BUILD_ID`, and `BUILD_TIME` together with
++`package.json` and `version.json`. `DATA_VERSION` is independent and is
++never touched by the bump.
++
++| Constant | What it is | When it moves |
++|---|---|---|
++| `APP_VERSION` | Human-facing release label, `<major>.<minor>` (for example `1.0`, `1.10`). Shown in the footer, the What's-New modal, and every backup. | Every release, via `npm run bump` (minor) or `npm run bump:major`. |
++| `BUILD_ID` | Short opaque id for this specific build (8–12 character hex). Compared by **identity**, never ordering, against `version.json`'s `buildId`. | Every bump, even when the human-facing label also moves. |
++| `BUILD_TIME` | ISO-8601 UTC timestamp the build was stamped. | Every bump, with `BUILD_ID`. |
++| `DATA_VERSION` | Schema of the exported JSON backup. Embedded in every backup file. | Only when the backup payload shape changes in a way that could break a restore. Hand-edit; do not use `npm run bump`. |
++| `MIN_COMPATIBLE_DATA_VERSION` | Oldest `DATA_VERSION` this build can import (after the migration chain in `versionCompat.js`). | Raise it when a breaking schema change makes older files unrestorable. |
++
++`package.json`'s `"version"` is `APP_VERSION` with a patch of `0`
++(`1.10` → `1.10.0`). `version.json` is the freshness probe the running
++app fetches: it carries `version`, `released` (local calendar date
++`YYYY-MM-DD`), `buildId`, and `buildTime`. Those four fields must agree
++with `version.js` after every bump. `/version.json` is never precached
++and is served `Cache-Control: no-store` so the update check always
++sees the deployed copy.
++
++## Minor vs major
++
++- **Minor** (`npm run bump`) is the default for any routine release:
++  content, copy, bug fixes, and ordinary behaviour changes. `1.0` →
++  `1.1`; `1.9` → `1.10`. The numbers are integers, not decimals —
++  `1.10` is newer than `1.9`.
++- **Major** (`npm run bump:major`) is a deliberate call the app owner
++  makes, typically for a significant content or behaviour change.
++  `1.4` → `2.0`. The minor number resets to zero.
++
++Do not hand-edit `APP_VERSION`. The bump script is what keeps
++`version.js`, `package.json`, and `version.json` in agreement; the
++test suite fails if they drift.
++
++## Release procedure
++
++1. **Write the release notes first.** Prepend a newest-first object to
++   the array in `changelog.js` (and update the hand-maintained
++   `CHANGELOG.md` mirror). The What's-New modal and `changelog.html`
++   both read `changelog.js`. Required shape:
++
++   ```js
++   {
++     version: '1.1',
++     date: 'YYYY-MM-DD',
++     type: 'minor',   // or 'major'
++     title: '<short title>',
++     highlights: ['<what changed>']
++   }
++   ```
++
++2. **Stamp the version.** `npm run bump` (or `npm run bump:major`).
++   That updates all eight fields in one run: `APP_VERSION`, `BUILD_ID`,
++   `BUILD_TIME` in `version.js`; `package.json` `"version"`; and
++   `version.json`'s `version`, `released`, `buildId`, and `buildTime`.
++   Use `--dry-run` to print the transition without writing.
++
++3. **Verify.** `npm test`. `tests/versionCompat.test.js` asserts that
++   `version.js`, `package.json`, `version.json`, and the newest
++   `changelog.js` entry all agree.
++
++4. **Commit** the bump and the notes together.
++
++5. **Push** to `main`. Netlify continuous deployment publishes the
++   repo root with no build command. `deploy.sh` is the manual fallback
++   and re-checks that the three version files agree before calling
++   `netlify deploy`.
++
++### Release notes are required
++
++The bump script exits non-zero if `changelog.js` has no entry whose
++`version` equals the new version. The version files stay bumped; only
++the exit code signals the missing notes — add the entry and run the
++tests, do not bump again.
++
++The test suite also fails without a newest-first entry for the
++shipping `APP_VERSION`. A deploy without What's-New copy is not a
++valid release.
++
++## Push hook
++
++`.githooks/pre-push` refuses a push to `main` whose committed
++`APP_VERSION` is not strictly greater (integer major, then integer
++minor) than the version currently on the remote. Other branches pass
++through. Creating `main` is allowed. Deleting `main` is skipped. If
++the remote `version.js` cannot be read (shallow clone, unfetched
++object, history from before this scheme), the hook warns and allows
++the push: failing to check is not evidence of a missing bump. If the
++local commit's `APP_VERSION` line cannot be parsed, the hook blocks
++and names the exact line shape to restore.
++
++The hook does not bump for you. Git has already decided which refs to
++send by the time `pre-push` runs, so a commit created there would sit
++unpushed and the next push would fail. The hook blocks; `npm run bump`
++does the edit.
++
++### Installing the hook
++
++`npm install` runs the `prepare` script, which sets
++`git config core.hooksPath .githooks`. To wire it by hand:
++
++```
++git config core.hooksPath .githooks
++```
++
++The hook file must be executable (`chmod +x .githooks/pre-push`).
++
++### When the hook blocks you
++
++It prints the remote version, the version you tried to push, and this
++remedy:
++
++```
++npm run bump && git commit -a --amend --no-edit
++```
++
++Or commit the bump as its own commit, then push again. Write the
++`changelog.js` entry before bumping.
++
++## Backup schema (`DATA_VERSION`)
++
++`DATA_VERSION` is independent of `APP_VERSION`. A cosmetic or
++curriculum release does not move it. Move it only when the exported
++JSON shape changes in a way that could break a restore:
++
++1. Hand-edit `DATA_VERSION` in `version.js`.
++2. Add a migration step in `versionCompat.js` from the previous
++   `DATA_VERSION` to the new one.
++3. Raise `MIN_COMPATIBLE_DATA_VERSION` only when older files become
++   unrestorable.
++
++The bump script will not do any of that.
+diff --git a/feedback.js b/feedback.js
+index 03bdab1..df40be5 100644
+--- a/feedback.js
++++ b/feedback.js
+@@ -24,12 +24,94 @@ window.HRL_FEEDBACK = (function () {
+     { value: 'other', label: 'Other' }
+   ];
+ 
++  var CONTEXTS = [
++    { value: 'home', label: 'Home' },
++    { value: 'path', label: 'My Path' },
++    { value: 'chapter', label: 'A chapter' },
++    { value: 'quiz', label: 'A chapter quiz' },
++    { value: 'iq', label: 'Baseball IQ test' },
++    { value: 'review', label: 'Review deck' },
++    { value: 'glossary', label: 'Glossary' },
++    { value: 'help', label: 'Help & Guide' },
++    { value: 'other', label: 'Somewhere else' }
++  ];
++
+   function trim(s) {
+     return String(s == null ? '' : s).replace(/^\s+|\s+$/g, '');
+   }
+ 
+   function appVersion() {
+-    return (window.HRL_VERSION && window.HRL_VERSION.APP_VERSION) || 'unknown';
++    var ver;
++    try {
++      ver = window.HRL_VERSION && window.HRL_VERSION.APP_VERSION;
++    } catch (err) {
++      ver = null;
++    }
++    return ver ? String(ver) : 'unknown';
++  }
++
++  function buildId() {
++    var id;
++    try {
++      id = window.HRL_VERSION && window.HRL_VERSION.BUILD_ID;
++    } catch (err) {
++      id = null;
++    }
++    return id ? String(id) : 'unknown';
++  }
++
++  function contextLabelFor(value) {
++    var i;
++    for (i = 0; i < CONTEXTS.length; i++) {
++      if (CONTEXTS[i].value === value) return CONTEXTS[i].label;
++    }
++    return 'Somewhere else';
++  }
++
++  function contextValueFromView(viewName) {
++    var i;
++    if (!viewName) return 'other';
++    for (i = 0; i < CONTEXTS.length; i++) {
++      if (CONTEXTS[i].value === viewName) return CONTEXTS[i].value;
++    }
++    return 'other';
++  }
++
++  function currentContextValue() {
++    var view = '';
++    try {
++      if (window.HRL_SHELL && typeof window.HRL_SHELL.current === 'function') {
++        view = window.HRL_SHELL.current();
++      }
++    } catch (err) {
++      view = '';
++    }
++    return contextValueFromView(view);
++  }
++
++  function currentChapterTitle(contextValue) {
++    var rootId;
++    var root;
++    var heading;
++    var text;
++    if (typeof document === 'undefined') return '';
++    if (contextValue === 'chapter') rootId = 'view-chapter';
++    else if (contextValue === 'quiz') rootId = 'view-quiz';
++    else return '';
++    root = document.getElementById(rootId);
++    if (!root) return '';
++    heading = root.querySelector('h2');
++    if (!heading) return '';
++    text = trim(heading.textContent || heading.innerText || '');
++    if (!text) return '';
++    if (contextValue === 'chapter' && text === 'Chapter') return '';
++    if (contextValue === 'quiz' && text === 'Chapter quiz') return '';
++    return text;
++  }
++
++  function whereLine(contextLabel, chapterTitle) {
++    if (chapterTitle) return contextLabel + ', ' + chapterTitle;
++    return contextLabel;
+   }
+ 
+   function categoryLabel(value) {
+@@ -68,31 +150,36 @@ window.HRL_FEEDBACK = (function () {
+     return window.screen.width + 'x' + window.screen.height;
+   }
+ 
+-  function buildBody(rating, catLabel, details) {
++  function buildBody(rating, catLabel, details, contextLabel, chapterTitle) {
+     var ratingLine;
++    var footer;
+     if (!rating) {
+       ratingLine = 'Rating: not rated';
+     } else {
+       ratingLine = 'Rating: ' + ratingStars(rating) + ' (' + rating + ' out of 5)';
+     }
+-    return (
+-      ratingLine + '\n' +
+-      'Category: ' + catLabel + '\n' +
+-      '\n' +
+-      'What happened:\n' +
+-      details + '\n' +
+-      '\n' +
++    footer =
+       '---\n' +
+       'App version: ' + appVersion() + '\n' +
++      'Build: ' + buildId() + '\n' +
++      'Where: ' + whereLine(contextLabel, chapterTitle) + '\n' +
+       'Page: ' + pageLine() + '\n' +
+       'Device: ' + deviceLine() + '\n' +
+       'Screen: ' + screenLine() + '\n' +
+-      'Sent: ' + new Date().toISOString()
++      'Sent: ' + new Date().toISOString();
++    return (
++      ratingLine + '\n' +
++      'Category: ' + catLabel + '\n' +
++      '\n' +
++      footer + '\n' +
++      '\n' +
++      'What happened:\n' +
++      details
+     );
+   }
+ 
+-  function buildSubject(catLabel, rating) {
+-    var subject = 'Homerun Learn to Play feedback — ' + catLabel;
++  function buildSubject(catLabel, rating, contextLabel) {
++    var subject = 'Homerun Learn to Play feedback — ' + catLabel + ' — ' + contextLabel;
+     if (rating > 0) subject += ' — ' + rating + '/5';
+     return subject;
+   }
+@@ -204,6 +291,8 @@ window.HRL_FEEDBACK = (function () {
+         var lastErrorOn = null;
+         var starButtons = [];
+         var i;
++        var openedContext = currentContextValue();
++        var openedTitle = currentChapterTitle(openedContext);
+ 
+         box.appendChild(api.el('p', {
+           class: 'feedback-intro',
+@@ -284,6 +373,19 @@ window.HRL_FEEDBACK = (function () {
+ 
+         box.appendChild(api.el('div', { class: 'feedback-rating' }, [group, ratingLabel]));
+ 
++        var contextLabelEl = api.el('label', { for: 'feedback-context', text: 'Where in the app?' });
++        var contextEl = api.el('select', { id: 'feedback-context' });
++        for (i = 0; i < CONTEXTS.length; i++) {
++          var ctxAttrs = {
++            value: CONTEXTS[i].value,
++            text: CONTEXTS[i].label
++          };
++          if (CONTEXTS[i].value === openedContext) {
++            ctxAttrs.selected = true;
++          }
++          contextEl.appendChild(api.el('option', ctxAttrs));
++        }
++
+         var catLabelEl = api.el('label', { for: 'feedback-category', text: 'What is this about?' });
+         var categoryEl = api.el('select', { id: 'feedback-category' });
+         for (i = 0; i < CATEGORIES.length; i++) {
+@@ -343,6 +445,7 @@ window.HRL_FEEDBACK = (function () {
+         });
+ 
+         var form = api.el('form', { class: 'feedback-form' }, [
++          api.el('div', { class: 'feedback-field' }, [contextLabelEl, contextEl]),
+           api.el('div', { class: 'feedback-field' }, [catLabelEl, categoryEl]),
+           api.el('div', { class: 'feedback-field' }, [detailsLabel, detailsEl, counterEl]),
+           errorEl,
+@@ -362,8 +465,14 @@ window.HRL_FEEDBACK = (function () {
+           }
+ 
+           var catLabel = categoryLabel(categoryEl.value);
+-          var subject = buildSubject(catLabel, rating);
+-          var fullBody = buildBody(rating, catLabel, details);
++          var contextValue = contextEl.value || 'other';
++          var contextLabel = contextLabelFor(contextValue);
++          var chapterTitle = '';
++          if ((contextValue === 'chapter' || contextValue === 'quiz') && contextValue === openedContext) {
++            chapterTitle = openedTitle;
++          }
++          var subject = buildSubject(catLabel, rating, contextLabel);
++          var fullBody = buildBody(rating, catLabel, details, contextLabel, chapterTitle);
+           var mailBody = fullBody;
+           var truncated = false;
+           if (fullBody.length > MAIL_BODY_LIMIT) {
+@@ -385,7 +494,57 @@ window.HRL_FEEDBACK = (function () {
+     });
+   }
+ 
++  function fabIcon() {
++    var svg;
++    var path;
++    if (typeof document === 'undefined') return null;
++    svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
++    svg.setAttribute('viewBox', '0 0 24 24');
++    svg.setAttribute('width', '20');
++    svg.setAttribute('height', '20');
++    svg.setAttribute('aria-hidden', 'true');
++    svg.setAttribute('focusable', 'false');
++    svg.setAttribute('class', 'feedback-fab-icon');
++    path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
++    path.setAttribute('fill', 'currentColor');
++    path.setAttribute('d', 'M1.5 8.67v8.58a3 3 0 0 0 3 3h15a3 3 0 0 0 3-3V8.67l-8.928 5.493a3 3 0 0 1-3.144 0L1.5 8.67zM22.5 6.908V6.75a3 3 0 0 0-3-3h-15a3 3 0 0 0-3 3v.158l9.714 5.978a1.5 1.5 0 0 0 1.572 0L22.5 6.908z');
++    svg.appendChild(path);
++    return svg;
++  }
++
++  function mount() {
++    var root;
++    var btn;
++    var label;
++    var icon;
++    if (typeof document === 'undefined') return;
++    if (document.querySelector('.feedback-fab')) return;
++    root = document.getElementById('feedback-fab-root');
++    if (!root) root = document.body;
++    if (!root) return;
++
++    btn = document.createElement('button');
++    btn.type = 'button';
++    btn.className = 'feedback-fab no-print';
++    btn.setAttribute('aria-label', 'Send feedback');
++
++    icon = fabIcon();
++    if (icon) btn.appendChild(icon);
++
++    label = document.createElement('span');
++    label.className = 'feedback-fab-label';
++    label.textContent = 'Send feedback';
++    btn.appendChild(label);
++
++    btn.addEventListener('click', function () {
++      open();
++    });
++
++    root.appendChild(btn);
++  }
++
+   return {
+-    open: open
++    open: open,
++    mount: mount
+   };
+ }());
+diff --git a/index.html b/index.html
+index 240814c..df358e2 100644
+--- a/index.html
++++ b/index.html
+@@ -192,6 +192,7 @@
+ 
+ <div id="modal-root"></div>
+ <div id="toast-root" aria-live="polite"></div>
++<div id="feedback-fab-root"></div>
+ 
+ <script src="version.js"></script>
+ <script src="versionCompat.js"></script>
+diff --git a/scripts/bump-version.mjs b/scripts/bump-version.mjs
+new file mode 100644
+index 0000000..de44540
+--- /dev/null
++++ b/scripts/bump-version.mjs
+@@ -0,0 +1,231 @@
++#!/usr/bin/env node
++/* ===================================================================
++   Homerun Learn to Play — scripts/bump-version.mjs
++   One-command version bump for a deploy. Increments APP_VERSION (minor
++   by default, major with --major), stamps a new BUILD_ID / BUILD_TIME,
++   and keeps package.json and version.json in agreement.
++
++   Usage:
++     node scripts/bump-version.mjs            # 1.0 → 1.1
++     node scripts/bump-version.mjs --major    # 1.4 → 2.0
++     node scripts/bump-version.mjs --dry-run  # print, write nothing
++
++   Edits version.js by regex-replacing the three tooling-parsed literal
++   lines rather than regenerating the file, so comments survive and the
++   diff stays readable. Those lines are also parsed by .githooks/pre-push;
++   do not change their shape without updating the hook and
++   tests/version.test.js.
++   =================================================================== */
++
++import { randomBytes } from 'node:crypto';
++import { readFileSync, writeFileSync } from 'node:fs';
++import { dirname, join } from 'node:path';
++import { fileURLToPath } from 'node:url';
++
++const root = join(dirname(fileURLToPath(import.meta.url)), '..');
++const versionJsPath = join(root, 'version.js');
++const packageJsonPath = join(root, 'package.json');
++const versionJsonPath = join(root, 'version.json');
++const changelogPath = join(root, 'changelog.js');
++
++// Load-bearing shapes — tests/version.test.js and .githooks/pre-push
++// parse the same literals. Keep these in lockstep with both.
++const APP_VERSION_RE = /^(  var APP_VERSION = ')(\d+)\.(\d+)(';)$/m;
++const BUILD_ID_RE = /^(  var BUILD_ID = ')([^']+)(';)$/m;
++const BUILD_TIME_RE = /^(  var BUILD_TIME = ')([^']+)(';)$/m;
++
++const APP_VERSION_SHAPE = "  var APP_VERSION = '<major>.<minor>';";
++const BUILD_ID_SHAPE = "  var BUILD_ID = '<id>';";
++const BUILD_TIME_SHAPE = "  var BUILD_TIME = '<ISO-8601>';";
++
++const args = process.argv.slice(2);
++const majorBump = args.indexOf('--major') !== -1;
++const dryRun = args.indexOf('--dry-run') !== -1;
++
++function fail(message) {
++  console.error(message);
++  process.exit(1);
++}
++
++function generateBuildId(previous) {
++  var id;
++  do {
++    id = randomBytes(5).toString('hex');
++  } while (id === previous);
++  return id;
++}
++
++function localCalendarDate(now) {
++  // Local calendar date, not UTC: a late-evening bump must not be
++  // stamped with tomorrow's date.
++  var y = now.getFullYear();
++  var m = String(now.getMonth() + 1).padStart(2, '0');
++  var d = String(now.getDate()).padStart(2, '0');
++  return y + '-' + m + '-' + d;
++}
++
++function toIso8601(now) {
++  return now.toISOString().replace(/\.\d{3}Z$/, 'Z');
++}
++
++function changelogHas(version) {
++  var code;
++  try {
++    code = readFileSync(changelogPath, 'utf8');
++  } catch (err) {
++    return false;
++  }
++  var list;
++  try {
++    list = new Function('window', code + '\nreturn window.HRL_CHANGELOG;')({});
++  } catch (err) {
++    return false;
++  }
++  if (!Array.isArray(list)) return false;
++  for (var i = 0; i < list.length; i++) {
++    if (list[i] && list[i].version === version) return true;
++  }
++  return false;
++}
++
++function missingNotesMessage(next, released) {
++  return [
++    'bump-version: changelog.js has no entry whose version is ' + next + '.',
++    'tests/versionCompat.test.js will fail until that entry exists.',
++    '',
++    'Prepend a newest-first object to the array in changelog.js:',
++    '',
++    '  {',
++    "    version: '" + next + "',",
++    "    date: '" + released + "',",
++    "    type: 'minor',",
++    "    title: '<short title>',",
++    "    highlights: ['<what changed>']",
++    '  }',
++    '',
++    'The version files stay bumped; only this exit code signals the missing notes.',
++    'Add the entry, then re-run the tests — do not run bump again.'
++  ].join('\n');
++}
++
++var versionJs;
++var pkg;
++var versionJson;
++
++try {
++  versionJs = readFileSync(versionJsPath, 'utf8');
++} catch (err) {
++  fail('bump-version: cannot read version.js. Changing nothing.');
++}
++
++try {
++  pkg = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
++} catch (err) {
++  fail('bump-version: cannot read or parse package.json. Changing nothing.');
++}
++
++try {
++  versionJson = JSON.parse(readFileSync(versionJsonPath, 'utf8'));
++} catch (err) {
++  fail('bump-version: cannot read or parse version.json. Changing nothing.');
++}
++
++var versionMatch = versionJs.match(APP_VERSION_RE);
++if (!versionMatch) {
++  fail(
++    'bump-version: could not find `' + APP_VERSION_SHAPE + '` in version.js.\n' +
++      'The bump script and the pre-push hook parse that exact line — restore it before bumping.\n' +
++      'Changing nothing.'
++  );
++}
++
++if (!BUILD_ID_RE.test(versionJs)) {
++  fail(
++    'bump-version: could not find `' + BUILD_ID_SHAPE + '` in version.js.\n' +
++      'Restore that exact single-quoted, one-per-line assignment. Changing nothing.'
++  );
++}
++
++if (!BUILD_TIME_RE.test(versionJs)) {
++  fail(
++    'bump-version: could not find `' + BUILD_TIME_SHAPE + '` in version.js.\n' +
++      'Restore that exact single-quoted, one-per-line assignment. Changing nothing.'
++  );
++}
++
++if (typeof pkg.version !== 'string') {
++  fail('bump-version: package.json has no string "version" field. Changing nothing.');
++}
++
++if (!versionJson || typeof versionJson !== 'object' || typeof versionJson.version !== 'string') {
++  fail('bump-version: version.json is missing a string "version" field. Changing nothing.');
++}
++
++var previousIdMatch = versionJs.match(BUILD_ID_RE);
++var previousBuildId = previousIdMatch ? previousIdMatch[2] : '';
++
++var major = Number(versionMatch[2]);
++var minor = Number(versionMatch[3]);
++var previous = major + '.' + minor;
++var nextMajor = majorBump ? major + 1 : major;
++var nextMinor = majorBump ? 0 : minor + 1;
++var next = nextMajor + '.' + nextMinor;
++
++var now = new Date();
++var released = localCalendarDate(now);
++var buildTime = toIso8601(now);
++var buildId = generateBuildId(previousBuildId);
++var pkgVersion = next + '.0';
++
++var nextVersionJs = versionJs.replace(APP_VERSION_RE, function (_m, prefix, _maj, _min, suffix) {
++  return prefix + next + suffix;
++});
++nextVersionJs = nextVersionJs.replace(BUILD_ID_RE, function (_m, prefix, _old, suffix) {
++  return prefix + buildId + suffix;
++});
++nextVersionJs = nextVersionJs.replace(BUILD_TIME_RE, function (_m, prefix, _old, suffix) {
++  return prefix + buildTime + suffix;
++});
++
++if (nextVersionJs === versionJs) {
++  fail('bump-version: version.js replacements did not change the file. Changing nothing.');
++}
++
++var nextPkg = Object.assign({}, pkg);
++nextPkg.version = pkgVersion;
++
++var nextVersionJson = Object.assign({}, versionJson);
++nextVersionJson.version = next;
++nextVersionJson.released = released;
++nextVersionJson.buildId = buildId;
++nextVersionJson.buildTime = buildTime;
++
++var transition = 'bump-version: ' + previous + ' → ' + next +
++  ' (build ' + buildId + ', released ' + released + ')';
++if (dryRun) transition += ' [dry-run]';
++
++console.log(transition);
++
++if (dryRun) {
++  console.log('bump-version: would update version.js APP_VERSION, BUILD_ID, BUILD_TIME');
++  console.log('bump-version: would update package.json version → ' + pkgVersion);
++  console.log('bump-version: would update version.json version, released, buildId, buildTime');
++  if (!changelogHas(next)) {
++    console.error(missingNotesMessage(next, released));
++    console.error('No files were written (--dry-run).');
++    process.exit(1);
++  }
++  console.log('bump-version: changelog.js already has an entry for ' + next + '.');
++  process.exit(0);
++}
++
++writeFileSync(versionJsPath, nextVersionJs);
++writeFileSync(packageJsonPath, JSON.stringify(nextPkg, null, 2) + '\n');
++writeFileSync(versionJsonPath, JSON.stringify(nextVersionJson, null, 2) + '\n');
++
++if (!changelogHas(next)) {
++  console.error(missingNotesMessage(next, released));
++  process.exit(1);
++}
++
++process.exit(0);
+diff --git a/shell.js b/shell.js
+index cb870c7..951271e 100644
+--- a/shell.js
++++ b/shell.js
+@@ -923,6 +923,12 @@ window.HRL_SHELL = (function () {
+     if (P && typeof P.storageAvailable === 'function' && !P.storageAvailable()) {
+       showStorageNotice();
+     }
++
++    if (window.HRL_FEEDBACK && typeof window.HRL_FEEDBACK.mount === 'function') {
++      try {
++        window.HRL_FEEDBACK.mount();
++      } catch (err) {}
++    }
+   }
+ 
+   if (typeof document !== 'undefined') {
+diff --git a/styles.css b/styles.css
+index d0563f2..97fc2f0 100644
+--- a/styles.css
++++ b/styles.css
+@@ -585,6 +585,82 @@ textarea {
+ 
+ #modal-root:empty { display: none; }
+ 
++/* Floating feedback button: below modal (z-index 100), above page chrome. */
++.feedback-fab {
++  position: fixed;
++  right: 1rem;
++  bottom: 1rem;
++  z-index: 80;
++  display: inline-flex;
++  align-items: center;
++  justify-content: center;
++  gap: 0.4rem;
++  min-height: 44px;
++  min-width: 44px;
++  padding: 0.55rem 0.95rem;
++  background: var(--brand-red);
++  color: var(--brand-white);
++  border: none;
++  border-radius: 999px;
++  box-shadow: var(--shadow-pop);
++  font: inherit;
++  font-size: var(--text-sm);
++  font-weight: 600;
++  line-height: 1;
++  cursor: pointer;
++  transition: background 0.15s ease;
++}
++.feedback-fab:hover,
++.feedback-fab:focus {
++  background: var(--brand-red-2);
++  border: none;
++  color: var(--brand-white);
++}
++.feedback-fab:focus-visible {
++  outline: 2px solid var(--brand-cream);
++  outline-offset: 2px;
++}
++.feedback-fab-icon {
++  width: 20px;
++  height: 20px;
++  flex: 0 0 auto;
++  display: block;
++}
++.feedback-fab-label {
++  white-space: nowrap;
++}
++
++@media (max-width: 767px) {
++  .feedback-fab {
++    width: 48px;
++    height: 48px;
++    padding: 0;
++    border-radius: 50%;
++    right: 0.75rem;
++    bottom: 1rem;
++  }
++  .feedback-fab-label {
++    position: absolute;
++    width: 1px;
++    height: 1px;
++    padding: 0;
++    margin: -1px;
++    overflow: hidden;
++    clip: rect(0, 0, 0, 0);
++    white-space: nowrap;
++    border: 0;
++  }
++}
++
++@media (prefers-reduced-motion: reduce) {
++  .feedback-fab {
++    transition: none;
++  }
++}
++body.reduced-motion .feedback-fab {
++  transition: none;
++}
++
+ .hidden { display: none !important; }
+ 
+ /* ===================================================================
+@@ -1654,7 +1730,7 @@ button.quiz-dot.wrong::after {
+   gap: 0.5rem 0.75rem;
+   width: 100%;
+   margin-top: 2rem;
+-  padding: 0.5rem 1rem;
++  padding: 0.5rem 1rem 4.5rem;
+   border-top: 1px solid rgba(6, 36, 72, 0.12);
+   font-size: var(--text-sm);
+   color: var(--color-muted);
+@@ -1812,6 +1888,7 @@ button.star-btn:focus-visible {
+   margin-bottom: 0.25rem;
+   color: var(--brand-navy);
+ }
++#feedback-context,
+ #feedback-category,
+ #feedback-details {
+   width: 100%;
+@@ -2087,7 +2164,7 @@ body.reduced-motion *::after {
+ 
+   .app-footer {
+     gap: 0.35rem 0.65rem;
+-    padding: 0.65rem 0.75rem 0.9rem;
++    padding: 0.65rem 0.75rem 4.75rem;
+     text-align: center;
+   }
+ }
+diff --git a/tests/version.test.js b/tests/version.test.js
+new file mode 100644
+index 0000000..cda7ba9
+--- /dev/null
++++ b/tests/version.test.js
+@@ -0,0 +1,210 @@
++/* ===================================================================
++   version.test.js — build identity, tooling-parsed literals, integer
++   version comparison, and build-id staleness.
++
++   Run with:  node tests/version.test.js
++   Or via:    npm test
++   =================================================================== */
++
++'use strict';
++
++const fs = require('fs');
++const path = require('path');
++
++let passed = 0;
++let failed = 0;
++
++function test(name, fn) {
++  try {
++    fn();
++    console.log('  PASS: ' + name);
++    passed++;
++  } catch (err) {
++    console.error('  FAIL: ' + name);
++    console.error('        ' + err.message);
++    failed++;
++  }
++}
++
++function assert(condition, msg) {
++  if (!condition) throw new Error(msg || 'Assertion failed');
++}
++
++function assertEqual(actual, expected, label) {
++  if (actual !== expected) {
++    throw new Error((label || 'Value') + ': expected "' + expected + '" but got "' + actual + '"');
++  }
++}
++
++const ROOT = path.join(__dirname, '..');
++
++const versionJsCode = fs.readFileSync(path.join(ROOT, 'version.js'), 'utf8');
++const versionFn = new Function('window', versionJsCode + '; return window.HRL_VERSION');
++const HRL_VERSION = versionFn({});
++
++const appUpdatesCode = fs.readFileSync(path.join(ROOT, 'appUpdates.js'), 'utf8');
++const appUpdatesFn = new Function('window', appUpdatesCode + '; return window.HRL_APP_UPDATES');
++const appUpdates = appUpdatesFn({});
++
++const versionJson = JSON.parse(fs.readFileSync(path.join(ROOT, 'version.json'), 'utf8'));
++
++// Must stay identical to scripts/bump-version.mjs.
++const APP_VERSION_RE = /^(  var APP_VERSION = ')(\d+)\.(\d+)(';)$/m;
++const BUILD_ID_RE = /^(  var BUILD_ID = ')([^']+)(';)$/m;
++const BUILD_TIME_RE = /^(  var BUILD_TIME = ')([^']+)(';)$/m;
++// Equivalent of the pre-push sed:
++// s/^[[:space:]]*var APP_VERSION = '\([0-9][0-9]*\.[0-9][0-9]*\)';.*/\1/p
++const HOOK_APP_VERSION_RE = /^  var APP_VERSION = '([0-9][0-9]*\.[0-9][0-9]*)';/;
++
++console.log('\nHRL_VERSION exports');
++
++test('exposes APP_VERSION', function () {
++  assertEqual(typeof HRL_VERSION.APP_VERSION, 'string', 'APP_VERSION type');
++  assert(HRL_VERSION.APP_VERSION.length > 0, 'APP_VERSION is non-empty');
++});
++
++test('exposes DATA_VERSION', function () {
++  assertEqual(typeof HRL_VERSION.DATA_VERSION, 'string', 'DATA_VERSION type');
++  assert(HRL_VERSION.DATA_VERSION.length > 0, 'DATA_VERSION is non-empty');
++});
++
++test('exposes MIN_COMPATIBLE_DATA_VERSION', function () {
++  assertEqual(typeof HRL_VERSION.MIN_COMPATIBLE_DATA_VERSION, 'string', 'MIN_COMPATIBLE_DATA_VERSION type');
++  assert(HRL_VERSION.MIN_COMPATIBLE_DATA_VERSION.length > 0, 'MIN_COMPATIBLE_DATA_VERSION is non-empty');
++});
++
++test('exposes BUILD_ID', function () {
++  assertEqual(typeof HRL_VERSION.BUILD_ID, 'string', 'BUILD_ID type');
++});
++
++test('exposes BUILD_TIME', function () {
++  assertEqual(typeof HRL_VERSION.BUILD_TIME, 'string', 'BUILD_TIME type');
++});
++
++test('BUILD_ID is a non-empty string', function () {
++  assert(typeof HRL_VERSION.BUILD_ID === 'string' && HRL_VERSION.BUILD_ID.length > 0, 'BUILD_ID');
++});
++
++test('BUILD_TIME parses as a valid date', function () {
++  assertEqual(Number.isNaN(Date.parse(HRL_VERSION.BUILD_TIME)), false, 'BUILD_TIME parseable (' + HRL_VERSION.BUILD_TIME + ')');
++});
++
++console.log('\ntooling-parsed literals');
++
++test('version.js APP_VERSION matches the bump-script regex', function () {
++  assertEqual(APP_VERSION_RE.test(versionJsCode), true, 'APP_VERSION_RE');
++});
++
++test('version.js BUILD_ID matches the bump-script regex', function () {
++  assertEqual(BUILD_ID_RE.test(versionJsCode), true, 'BUILD_ID_RE');
++});
++
++test('version.js BUILD_TIME matches the bump-script regex', function () {
++  assertEqual(BUILD_TIME_RE.test(versionJsCode), true, 'BUILD_TIME_RE');
++});
++
++test('version.js APP_VERSION matches the pre-push sed equivalent', function () {
++  const lines = versionJsCode.split(/\n/);
++  let matched = false;
++  for (let i = 0; i < lines.length; i++) {
++    if (HOOK_APP_VERSION_RE.test(lines[i])) {
++      matched = true;
++      break;
++    }
++  }
++  assertEqual(matched, true, 'HOOK_APP_VERSION_RE');
++});
++
++test('literal APP_VERSION equals the exported value', function () {
++  const m = versionJsCode.match(APP_VERSION_RE);
++  assert(m, 'APP_VERSION literal present');
++  assertEqual(m[2] + '.' + m[3], HRL_VERSION.APP_VERSION, 'APP_VERSION literal vs export');
++});
++
++test('literal BUILD_ID equals the exported value', function () {
++  const m = versionJsCode.match(BUILD_ID_RE);
++  assert(m, 'BUILD_ID literal present');
++  assertEqual(m[2], HRL_VERSION.BUILD_ID, 'BUILD_ID literal vs export');
++});
++
++test('literal BUILD_TIME equals the exported value', function () {
++  const m = versionJsCode.match(BUILD_TIME_RE);
++  assert(m, 'BUILD_TIME literal present');
++  assertEqual(m[2], HRL_VERSION.BUILD_TIME, 'BUILD_TIME literal vs export');
++});
++
++test('bump-version.mjs still uses the same three regexes', function () {
++  const src = fs.readFileSync(path.join(ROOT, 'scripts', 'bump-version.mjs'), 'utf8');
++  assert(src.indexOf("/^(  var APP_VERSION = ')(\\d+)\\.(\\d+)(';)$/m") !== -1, 'APP_VERSION_RE in bump script');
++  assert(src.indexOf("/^(  var BUILD_ID = ')([^']+)(';)$/m") !== -1, 'BUILD_ID_RE in bump script');
++  assert(src.indexOf("/^(  var BUILD_TIME = ')([^']+)(';)$/m") !== -1, 'BUILD_TIME_RE in bump script');
++});
++
++test('pre-push hook still uses the APP_VERSION sed', function () {
++  const src = fs.readFileSync(path.join(ROOT, '.githooks', 'pre-push'), 'utf8');
++  assert(
++    src.indexOf("s/^  var APP_VERSION = '\\([0-9][0-9]*\\.[0-9][0-9]*\\)';.*/\\1/p") !== -1,
++    'pre-push sed'
++  );
++});
++
++console.log('\ninteger version comparison');
++
++test('1.10 is newer than 1.9', function () {
++  assertEqual(appUpdates.compareVersions('1.10', '1.9'), 1, '1.10 vs 1.9');
++});
++
++test('2.0 is newer than 1.99', function () {
++  assertEqual(appUpdates.compareVersions('2.0', '1.99'), 1, '2.0 vs 1.99');
++});
++
++test('equal versions compare equal', function () {
++  assertEqual(appUpdates.compareVersions('1.0', '1.0'), 0, '1.0 vs 1.0');
++});
++
++console.log('\nbuild-id staleness');
++
++test('differing ids are stale', function () {
++  assertEqual(appUpdates.isStaleBuild('aaa', 'bbb'), true, 'aaa vs bbb');
++});
++
++test('identical ids are not stale', function () {
++  assertEqual(appUpdates.isStaleBuild('aaa', 'aaa'), false, 'aaa vs aaa');
++});
++
++test('null is never stale', function () {
++  assertEqual(appUpdates.isStaleBuild(null, 'aaa'), false, 'null');
++});
++
++test('undefined is never stale', function () {
++  assertEqual(appUpdates.isStaleBuild(undefined, 'aaa'), false, 'undefined');
++});
++
++test('empty string is never stale', function () {
++  assertEqual(appUpdates.isStaleBuild('', 'aaa'), false, 'empty string');
++});
++
++test('non-string is never stale', function () {
++  assertEqual(appUpdates.isStaleBuild(123, 'aaa'), false, 'number');
++  assertEqual(appUpdates.isStaleBuild({ id: 'x' }, 'aaa'), false, 'object');
++});
++
++console.log('\nversion.json agrees with version.js');
++
++test('version.json buildId matches version.js BUILD_ID', function () {
++  assertEqual(versionJson.buildId, HRL_VERSION.BUILD_ID, 'buildId');
++});
++
++test('version.json buildTime matches version.js BUILD_TIME', function () {
++  assertEqual(versionJson.buildTime, HRL_VERSION.BUILD_TIME, 'buildTime');
++});
++
++console.log('\n----------------------------------------');
++console.log('Results: ' + passed + ' passed, ' + failed + ' failed');
++if (global.__HRL_TEST_RUNNER && typeof global.__HRL_TEST_RUNNER.record === 'function') {
++  global.__HRL_TEST_RUNNER.record(path.basename(__filename), passed, failed);
++} else if (failed > 0) {
++  process.exit(1);
++} else {
++  console.log('All tests passed.');
++}
+diff --git a/tests/versionCompat.test.js b/tests/versionCompat.test.js
+index c5ce822..ccdffd6 100644
+--- a/tests/versionCompat.test.js
++++ b/tests/versionCompat.test.js
+@@ -287,6 +287,19 @@ test('changelog.js entries are well-formed and ordered newest-first', function (
+   }
+ });
+ 
++test('version.json carries a non-empty string buildId and a parseable buildTime', function () {
++  const data = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'version.json'), 'utf8'));
++  assertEqual(typeof data.buildId === 'string' && data.buildId.length > 0, true, 'version.json buildId');
++  assertEqual(typeof data.buildTime === 'string' && data.buildTime.length > 0, true, 'version.json buildTime type');
++  assertEqual(Number.isNaN(Date.parse(data.buildTime)), false, 'version.json buildTime parseable (' + data.buildTime + ')');
++});
++
++test('version.json buildId equals version.js BUILD_ID', function () {
++  const data = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'version.json'), 'utf8'));
++  const api = versionFn(versionSandbox);
++  assertEqual(data.buildId, api.BUILD_ID, 'version.json buildId vs version.js BUILD_ID');
++});
++
+ // ---------------------------------------------------------------------------
+ // Summary
+ // ---------------------------------------------------------------------------
+diff --git a/version.js b/version.js
+index 3ed0f52..61b4c13 100644
+--- a/version.js
++++ b/version.js
+@@ -7,15 +7,27 @@
+    - Bump DATA_VERSION only when the shape of the exported JSON changes
+      in a way that could break a restore. See docs/VERSIONING.md.
+    - Keep package.json "version" in sync with APP_VERSION (major.minor.0).
++   - `npm run bump` maintains APP_VERSION, BUILD_ID, BUILD_TIME, package.json
++     and version.json together. Do not edit them by hand.
++   - The three `var APP_VERSION/BUILD_ID/BUILD_TIME = '...';` lines below are
++     parsed as TEXT by scripts/bump-version.mjs and .githooks/pre-push.
++     Keep their exact literal shape or that tooling breaks.
+    =================================================================== */
+ 
+-// Expose on window so practice.js and versionCompat.js can read without ES modules.
++// Exposed on window so the rest of the app can read it without ES modules.
+ window.HRL_VERSION = (function () {
+   'use strict';
+ 
+   // Human-facing release label shown in the UI and embedded in every backup.
+   var APP_VERSION = '1.0';
+ 
++  // Identity of this specific build. Unlike APP_VERSION it changes on every
++  // bump, so the update check can spot a redeploy even at the same label.
++  var BUILD_ID = 'ead1c37c10';
++
++  // When this build was stamped, ISO-8601 UTC.
++  var BUILD_TIME = '2026-08-21T01:54:56Z';
++
+   // Governs backup/restore compatibility. Incremented independently of
+   // APP_VERSION when the exported JSON payload shape changes.
+   var DATA_VERSION = '1.0';
+@@ -26,6 +38,8 @@ window.HRL_VERSION = (function () {
+ 
+   return {
+     APP_VERSION: APP_VERSION,
++    BUILD_ID: BUILD_ID,
++    BUILD_TIME: BUILD_TIME,
+     DATA_VERSION: DATA_VERSION,
+     MIN_COMPATIBLE_DATA_VERSION: MIN_COMPATIBLE_DATA_VERSION
+   };
+diff --git a/version.json b/version.json
+index e4e0596..fc10434 100644
+--- a/version.json
++++ b/version.json
+@@ -1,4 +1,6 @@
+ {
+   "version": "1.0",
+-  "released": "2026-08-19"
++  "released": "2026-08-19",
++  "buildId": "ead1c37c10",
++  "buildTime": "2026-08-21T01:54:56Z"
+ }

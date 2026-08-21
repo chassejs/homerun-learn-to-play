@@ -4,6 +4,15 @@
 
 Numbering scheme: a minor update adds 0.1; a major update adds 1.0 and resets the minor to 0.
 
+## 1.1 — 2026-08-20
+
+- A feedback button now sits in the corner of every screen, so you can report a wrong answer or a confusing lesson without leaving the page you are on.
+- The feedback form knows where you were — it pre-fills the screen you came from, and names the chapter when you are reading one.
+- The app now checks for a newer version when you open it and after it has been sitting in the background, and offers to reload.
+- A new version tells you what changed the first time you open it, and the full history stays available under Version history.
+- Reports now carry the exact build you were running, so a problem can be traced to the version that had it.
+- Releases are now version-stamped automatically: `npm run bump` updates every version file together, and a pre-push hook refuses a deploy that did not bump. See `docs/VERSIONING.md`.
+
 ## 1.0 — 2026-08-19
 
 Initial release of Homerun Learn to Play.
