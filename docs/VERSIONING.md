@@ -116,6 +116,41 @@ across six sites the account averaged 2.0 deploys per work session. When
 every push deployed, there was no moment at which to think. Now there is,
 and it is a deliberate second command.
 
+### The Netlify side
+
+The site's production branch is set to `deploy` and `main` is not an
+allowed branch, so a push to `main` has nothing to trigger.
+
+Setting this via the API has a trap: sending only
+`build_settings.repo_branch` is silently ignored — `allowed_branches`
+updates but the production branch does not. The whole `repo` object has
+to go in one call:
+
+```bash
+netlify api updateSite --data '{
+  "site_id": "<id>",
+  "body": {"repo": {
+    "provider": "github",
+    "repo_path": "chassejs/<repo>",
+    "repo_url": "https://github.com/chassejs/<repo>",
+    "repo_branch": "deploy",
+    "allowed_branches": ["deploy"],
+    "dir": ".",
+    "cmd": null,
+    "installation_id": <id>
+  }}
+}'
+```
+
+Read the existing values with `netlify api getSite` first and carry them
+through — omitting `dir` or `cmd` from that object resets them.
+
+**To undo**, put `main` back in both fields the same way.
+
+**Do not use `stop_builds`.** It looks like the obvious switch and it is
+not: it blocks CLI deploys too, so `./deploy.sh` returns `Forbidden` and
+there is no way to deploy at all. Confirmed by testing.
+
 ### The promotion hook
 
 `.githooks/pre-push` gates pushes to `deploy` — and **only** to `deploy`.
