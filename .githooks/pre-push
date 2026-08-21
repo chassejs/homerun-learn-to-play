@@ -1,7 +1,20 @@
 #!/bin/sh
 # ===================================================================
 # Homerun Learn to Play — .githooks/pre-push
-# Refuse a push to main that does not increase APP_VERSION.
+#
+# Gates the DEPLOY branch, not main.
+#
+# Netlify's production branch for this site is `deploy`. Pushing to
+# `main` publishes nothing, so day-to-day work is free and unguarded.
+# Promoting to `deploy` is the deploy gesture:
+#
+#     git push origin main:deploy
+#
+# That push is the metered, user-visible act, so it is the one worth
+# gating. This hook refuses a promotion that either:
+#
+#   1. fails preflight (scripts/preflight.mjs), or
+#   2. does not increase APP_VERSION over what is already deployed.
 #
 # Why a check rather than an automatic bump: git has already decided
 # which refs to send by the time pre-push runs, so a commit created
@@ -14,6 +27,7 @@
 
 ZERO='0000000000000000000000000000000000000000'
 VERSION_FILE='version.js'
+DEPLOY_REF='refs/heads/deploy'
 
 # Read `var APP_VERSION = '<major>.<minor>';` from the committed file.
 # Exactly two spaces of indent — the same shape the bump script writes
@@ -37,17 +51,36 @@ version_gt() {
 }
 
 while read -r local_ref local_sha remote_ref remote_sha; do
-  [ "$remote_ref" = 'refs/heads/main' ] || continue
+  # Pushes to main (or anywhere else) are not deploys — let them through.
+  [ "$remote_ref" = "$DEPLOY_REF" ] || continue
   [ "$local_sha" = "$ZERO" ] && continue          # branch deletion
 
+  echo "pre-push: promoting to deploy — this publishes. Checking first."
+
+  # --- 1. Preflight -------------------------------------------------
+  # Every check in preflight encodes a defect that previously cost a
+  # second deploy. It runs against the working tree; preflight itself
+  # warns when that differs from what is committed.
+  if [ -f scripts/preflight.mjs ]; then
+    if ! node scripts/preflight.mjs; then
+      echo >&2
+      echo "pre-push: BLOCKED — preflight failed, so this promotion is not deployable." >&2
+      echo "          Fix the failures above and promote again." >&2
+      exit 1
+    fi
+  else
+    echo "pre-push: scripts/preflight.mjs not found — skipping preflight."
+  fi
+
+  # --- 2. Version must increase over what is deployed ---------------
   new_version=$(version_at "$local_sha") || {
     echo "pre-push: cannot read APP_VERSION from $VERSION_FILE in the commit being pushed." >&2
     echo "          Restore  var APP_VERSION = '<major>.<minor>';  — the release stamp depends on it." >&2
     exit 1
   }
 
-  if [ "$remote_sha" = "$ZERO" ]; then            # creating main
-    echo "pre-push: new branch — version $new_version accepted."
+  if [ "$remote_sha" = "$ZERO" ]; then            # first ever deploy
+    echo "pre-push: first deploy — version $new_version accepted."
     continue
   fi
 
@@ -55,20 +88,22 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     # Unreadable remote side (shallow clone, pre-this-scheme history, object
     # not fetched). Warn rather than block: failing to *check* is not
     # evidence of a missing bump.
-    echo "pre-push: could not read the previous APP_VERSION — skipping the check."
+    echo "pre-push: could not read the deployed APP_VERSION — skipping the version check."
     continue
   }
 
   if ! version_gt "$new_version" "$old_version"; then
-    echo "pre-push: BLOCKED — the version must increase on every push to main." >&2
-    echo "          origin/main is at $old_version; this push is $new_version." >&2
+    echo "pre-push: BLOCKED — the version must increase on every deploy." >&2
+    echo "          deploy is at $old_version; this promotion is $new_version." >&2
     echo >&2
-    echo "          npm run bump && git commit -a --amend --no-edit" >&2
-    echo "            (or commit the bump separately, then push again)" >&2
+    echo "          Write the changelog.js entry, then:" >&2
+    echo "            npm run bump   (or npm run bump:major)" >&2
+    echo "            git commit -am 'x.y — summary'" >&2
+    echo "            git push origin main && git push origin main:deploy" >&2
     exit 1
   fi
 
-  echo "pre-push: $old_version → $new_version."
+  echo "pre-push: $old_version → $new_version — deploying."
 done
 
 exit 0

@@ -71,10 +71,19 @@ test suite fails if they drift.
 
 4. **Commit** the bump and the notes together.
 
-5. **Push** to `main`. Netlify continuous deployment publishes the
-   repo root with no build command. `deploy.sh` is the manual fallback
-   and re-checks that the three version files agree before calling
-   `netlify deploy`.
+5. **Push to `main`.** This publishes nothing — `main` is not
+   Netlify's production branch. Work accumulates here freely.
+
+6. **Promote to deploy.** This is the deploy:
+
+   ```
+   git push origin main:deploy
+   ```
+
+   The `pre-push` hook runs preflight and checks the version increased
+   over what is already deployed, then Netlify publishes the `deploy`
+   branch. `./deploy.sh` remains available as a cheaper direct upload
+   that bypasses Netlify's build pipeline.
 
 ### Release notes are required
 
@@ -87,63 +96,70 @@ The test suite also fails without a newest-first entry for the
 shipping `APP_VERSION`. A deploy without What's-New copy is not a
 valid release.
 
-## Push hook
+## The deploy branch
 
-`.githooks/pre-push` refuses a push to `main` whose committed
-`APP_VERSION` is not strictly greater (integer major, then integer
-minor) than the version currently on the remote. Other branches pass
-through. Creating `main` is allowed. Deleting `main` is skipped. If
-the remote `version.js` cannot be read (shallow clone, unfetched
-object, history from before this scheme), the hook warns and allows
-the push: failing to check is not evidence of a missing bump. If the
-local commit's `APP_VERSION` line cannot be parsed, the hook blocks
-and names the exact line shape to restore.
+Netlify's production branch for this site is **`deploy`**, not `main`.
 
-The hook does not bump for you. Git has already decided which refs to
-send by the time `pre-push` runs, so a commit created there would sit
-unpushed and the next push would fail. The hook blocks; `npm run bump`
-does the edit.
+- Pushing to `main` publishes **nothing**. Day-to-day work, review, and
+  merging are free and unguarded.
+- Pushing `main` to `deploy` **is** the deploy gesture:
+
+  ```
+  git push origin main:deploy
+  ```
+
+`git log deploy` is therefore a true deploy history: every commit on it
+was published, in the order it shipped.
+
+This exists because deploys are metered and were being spent carelessly —
+across six sites the account averaged 2.0 deploys per work session. When
+every push deployed, there was no moment at which to think. Now there is,
+and it is a deliberate second command.
+
+### The promotion hook
+
+`.githooks/pre-push` gates pushes to `deploy` — and **only** to `deploy`.
+Pushes to `main` pass through untouched and instantly.
+
+A promotion is refused if either:
+
+1. **Preflight fails** (`scripts/preflight.mjs`). Every check in it
+   encodes a defect that previously cost a second deploy.
+2. **`APP_VERSION` did not increase** over the version currently on
+   `deploy`. Integer comparison, so `1.10` beats `1.9`.
+
+Failing to *read* the deployed version (shallow clone, unfetched object)
+warns and allows — not being able to check is not evidence of a problem.
+Creating `deploy` for the first time is accepted.
+
+Why a check and not an automatic bump: git has already decided which refs
+to send by the time `pre-push` runs, so a commit created here would sit
+unpushed and the very next push would fail.
 
 ### Installing the hook
 
-`npm install` runs the `prepare` script, which sets
-`git config core.hooksPath .githooks`. To wire it by hand:
+`npm install` sets it via the `prepare` script. By hand:
 
 ```
 git config core.hooksPath .githooks
 ```
 
-The hook file must be executable (`chmod +x .githooks/pre-push`).
+This repo has no dependencies, so nobody runs `npm install` in normal
+use — on a fresh clone, run the `git config` line once. Without it the
+hook is silently absent and nothing gates a deploy.
 
 ### When the hook blocks you
 
-It prints the remote version, the version you tried to push, and this
-remedy:
+Write the `changelog.js` entry, then:
 
 ```
-npm run bump && git commit -a --amend --no-edit
+npm run bump
+git commit -am "x.y — summary"
+git push origin main && git push origin main:deploy
 ```
 
-Or commit the bump as its own commit, then push again. Write the
-`changelog.js` entry before bumping.
-
-### Commits that ship no code
-
-The hook checks every push to `main`, including ones that only touch
-documentation, tests, or `.claude/build-runs/` artifacts. Those change
-nothing a user can see, so bumping for them would inflate the version
-history and make release notes meaningless.
-
-For a commit that touches **no shipped code**, bypass the hook:
-
-```
-git push --no-verify
-```
-
-Use it only when that is genuinely true. If the push contains any change
-to app code, styles, or content, bump instead — that is the case the hook
-exists for, and skipping it is how two different builds end up sharing a
-version number.
+A promotion that ships no user-visible code (docs, tooling, build
+artifacts) does not belong on `deploy` at all — leave it on `main`.
 
 ## Deploying deliberately
 
@@ -153,7 +169,7 @@ actual work. The second deploy in a session is almost always "deployed,
 noticed something, deployed again", which means the thing noticed could have
 been caught before deploying.
 
-**The rule: one deploy per work session, at the end.**
+**The rule: one promotion to `deploy` per work session, at the end.**
 
 Before deploying, run:
 
@@ -170,9 +186,10 @@ those checks exists because that exact defect previously cost a second deploy.
 `./deploy.sh` runs preflight itself and refuses to deploy if it fails, so the
 gate is not something you can forget.
 
-**Push freely, deploy deliberately.** Committing and pushing costs nothing;
-the deploy is the metered act. Batch a session's work behind a single version
-bump rather than bumping per fix.
+**Push freely, promote deliberately.** Pushing to `main` costs nothing; the
+promotion to `deploy` is the metered act. Batch a session's work behind a
+single version bump rather than bumping per fix — that is what makes a version
+number mean something.
 
 ## Backup schema (`DATA_VERSION`)
 
