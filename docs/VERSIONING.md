@@ -127,6 +127,24 @@ npm run bump && git commit -a --amend --no-edit
 Or commit the bump as its own commit, then push again. Write the
 `changelog.js` entry before bumping.
 
+### Commits that ship no code
+
+The hook checks every push to `main`, including ones that only touch
+documentation, tests, or `.claude/build-runs/` artifacts. Those change
+nothing a user can see, so bumping for them would inflate the version
+history and make release notes meaningless.
+
+For a commit that touches **no shipped code**, bypass the hook:
+
+```
+git push --no-verify
+```
+
+Use it only when that is genuinely true. If the push contains any change
+to app code, styles, or content, bump instead — that is the case the hook
+exists for, and skipping it is how two different builds end up sharing a
+version number.
+
 ## Backup schema (`DATA_VERSION`)
 
 `DATA_VERSION` is independent of `APP_VERSION`. A cosmetic or
