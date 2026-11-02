@@ -10,6 +10,17 @@ window.HRL_CHANGELOG = (function () {
 
   return [
     {
+      version: '1.4',
+      date: '2026-11-02',
+      type: 'minor',
+      title: 'Admin queue and a last-updated date',
+      highlights: [
+        'Admin, in the footer, is where you review feedback sent from this browser. You can mark a comment in review or resolved. The email to the club still opens as before.',
+        'Sign-in starts as username admin, password admin. You can add other admins and set a new password for anyone on the list. Passwords are stored as a hash on this browser.',
+        'The footer now shows the date this version was last updated, next to the version number.'
+      ]
+    },
+    {
       version: '1.3',
       date: '2026-08-20',
       type: 'minor',

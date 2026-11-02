@@ -87,11 +87,104 @@ window.HRL_APP_UPDATES = (function () {
     return list[0];
   }
 
+  var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  function formatReleaseDate(iso) {
+    var parts = String(iso || '').split('-');
+    var year;
+    var month;
+    var day;
+    if (parts.length < 3) return '';
+    year = parts[0];
+    month = parseInt(parts[1], 10);
+    day = parseInt(parts[2], 10);
+    if (!year || year.length !== 4) return '';
+    if (!month || month < 1 || month > 12) return '';
+    if (!day || day < 1 || day > 31) return '';
+    return String(day) + ' ' + MONTHS[month - 1] + ' ' + year;
+  }
+
+  // The date the running release was last updated. Prefer the changelog
+  // entry for this APP_VERSION, then the newest note, then the build stamp.
+  function releaseDateIso() {
+    var version = getAppVersion();
+    var list = window.HRL_CHANGELOG;
+    var i;
+    var entry;
+    var formatted;
+    var built;
+    if (list && list.length) {
+      for (i = 0; i < list.length; i++) {
+        entry = list[i];
+        if (entry && entry.version === version && formatReleaseDate(entry.date)) {
+          return String(entry.date).slice(0, 10);
+        }
+      }
+      if (list[0] && formatReleaseDate(list[0].date)) return String(list[0].date).slice(0, 10);
+    }
+    built = window.HRL_VERSION && window.HRL_VERSION.BUILD_TIME;
+    if (typeof built === 'string' && built.length >= 10) {
+      formatted = formatReleaseDate(built.slice(0, 10));
+      if (formatted) return built.slice(0, 10);
+    }
+    return '';
+  }
+
+  function lastUpdatedText() {
+    var iso = releaseDateIso();
+    var label = formatReleaseDate(iso);
+    if (!label) return '';
+    return 'Last updated ' + label;
+  }
+
+  function fillUpdatedTime(node, iso, label) {
+    if (!node) return;
+    if (!iso || !label) {
+      node.hidden = true;
+      node.textContent = '';
+      node.removeAttribute('datetime');
+      return;
+    }
+    node.hidden = false;
+    node.setAttribute('datetime', iso);
+    node.textContent = label;
+  }
+
+  function fillVersionFooter(version, iso) {
+    var host;
+    var versionLine;
+    var dateLine;
+    var time;
+    var label;
+    if (typeof document === 'undefined') return;
+    host = document.getElementById('version-footer');
+    if (!host) return;
+    while (host.firstChild) host.removeChild(host.firstChild);
+    versionLine = document.createElement('p');
+    versionLine.textContent = 'You are running version ' + version + '.';
+    host.appendChild(versionLine);
+    label = formatReleaseDate(iso);
+    if (!label) return;
+    dateLine = document.createElement('p');
+    dateLine.appendChild(document.createTextNode('Last updated '));
+    time = document.createElement('time');
+    time.id = 'help-updated-label';
+    time.setAttribute('datetime', iso);
+    time.textContent = label;
+    dateLine.appendChild(time);
+    dateLine.appendChild(document.createTextNode('.'));
+    host.appendChild(dateLine);
+  }
+
   function initFooter() {
     if (typeof document === 'undefined') return;
     var version = getAppVersion();
+    var iso = releaseDateIso();
     var label = document.getElementById('app-version-label');
+    var updated = document.getElementById('app-updated-label');
     if (label) label.textContent = version;
+    fillUpdatedTime(updated, iso, lastUpdatedText());
+    fillVersionFooter(version, iso);
 
     var whatsNew = document.getElementById('footer-whats-new');
     if (whatsNew) {
@@ -368,6 +461,9 @@ window.HRL_APP_UPDATES = (function () {
     checkForUpdate: checkForUpdate,
     showWhatsNew: showWhatsNew,
     compareVersions: compareVersions,
-    isStaleBuild: isStaleBuild
+    isStaleBuild: isStaleBuild,
+    formatReleaseDate: formatReleaseDate,
+    releaseDateIso: releaseDateIso,
+    lastUpdatedText: lastUpdatedText
   };
 }());

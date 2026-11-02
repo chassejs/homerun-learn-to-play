@@ -33,6 +33,7 @@ window.HRL_FEEDBACK = (function () {
     { value: 'review', label: 'Review deck' },
     { value: 'glossary', label: 'Glossary' },
     { value: 'help', label: 'Help & Guide' },
+    { value: 'admin', label: 'Admin' },
     { value: 'other', label: 'Somewhere else' }
   ];
 
@@ -58,6 +59,126 @@ window.HRL_FEEDBACK = (function () {
       id = null;
     }
     return id ? String(id) : 'unknown';
+  }
+
+  var COMMENT_KEY = 'homerun-learn/feedback/v1';
+  var COMMENT_MAX = 200;
+  var commentMemory = {};
+  var commentSeq = 0;
+
+  function commentStore() {
+    try {
+      if (typeof localStorage !== 'undefined' && localStorage && typeof localStorage.getItem === 'function') {
+        localStorage.getItem(COMMENT_KEY);
+        return localStorage;
+      }
+    } catch (err) {}
+    return {
+      getItem: function (key) {
+        return Object.prototype.hasOwnProperty.call(commentMemory, key) ? commentMemory[key] : null;
+      },
+      setItem: function (key, value) {
+        commentMemory[key] = String(value);
+      },
+      removeItem: function (key) {
+        delete commentMemory[key];
+      }
+    };
+  }
+
+  function readComments() {
+    var raw;
+    var parsed;
+    try {
+      raw = commentStore().getItem(COMMENT_KEY);
+    } catch (err) {
+      raw = null;
+    }
+    if (!raw) return [];
+    try {
+      parsed = JSON.parse(raw);
+    } catch (err2) {
+      return [];
+    }
+    return Object.prototype.toString.call(parsed) === '[object Array]' ? parsed : [];
+  }
+
+  function writeComments(list) {
+    try {
+      commentStore().setItem(COMMENT_KEY, JSON.stringify(list));
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function clampRating(value) {
+    var n = parseInt(value, 10);
+    if (isNaN(n) || n < 0) return 0;
+    if (n > 5) return 5;
+    return n;
+  }
+
+  function record(input) {
+    var list = readComments();
+    var entry;
+    input = input || {};
+    commentSeq += 1;
+    entry = {
+      id: 'fb-' + commentSeq + '-' + new Date().getTime().toString(36),
+      createdAt: new Date().toISOString(),
+      status: 'new',
+      rating: clampRating(input.rating),
+      category: String(input.category || ''),
+      categoryLabel: String(input.categoryLabel || ''),
+      context: String(input.context || ''),
+      contextLabel: String(input.contextLabel || ''),
+      chapterTitle: String(input.chapterTitle || ''),
+      details: String(input.details || ''),
+      version: String(input.version || appVersion()),
+      buildId: String(input.buildId || buildId())
+    };
+    list.push(entry);
+    while (list.length > COMMENT_MAX) list.shift();
+    if (!writeComments(list)) return null;
+    return entry;
+  }
+
+  function listComments() {
+    var list = readComments();
+    var out = [];
+    var i;
+    for (i = list.length - 1; i >= 0; i--) out.push(list[i]);
+    return out;
+  }
+
+  function setStatus(id, status) {
+    var list = readComments();
+    var i;
+    var found = false;
+    if (status !== 'new' && status !== 'reviewing' && status !== 'resolved') {
+      return { ok: false, message: 'That status is not one this queue uses.' };
+    }
+    for (i = 0; i < list.length; i++) {
+      if (list[i] && list[i].id === id) {
+        list[i].status = status;
+        found = true;
+        break;
+      }
+    }
+    if (!found) return { ok: false, message: 'That comment is no longer in the queue.' };
+    if (!writeComments(list)) return { ok: false, message: 'Could not update that comment on this browser.' };
+    return { ok: true, message: '' };
+  }
+
+  function resetCommentStore() {
+    var key;
+    try {
+      commentStore().removeItem(COMMENT_KEY);
+    } catch (err) {}
+    for (key in commentMemory) {
+      if (Object.prototype.hasOwnProperty.call(commentMemory, key)) delete commentMemory[key];
+    }
   }
 
   function contextLabelFor(value) {
@@ -249,7 +370,7 @@ window.HRL_FEEDBACK = (function () {
 
     box.appendChild(api.el('p', {
       class: 'feedback-confirm',
-      text: 'Your email app should have opened with the message ready. You still need to press Send there.'
+      text: 'Your email app should have opened with the message ready. You still need to press Send there. A copy is also saved on this browser so an admin can review it.'
     }));
     box.appendChild(api.el('p', {
       class: 'feedback-confirm-note',
@@ -471,6 +592,16 @@ window.HRL_FEEDBACK = (function () {
           if ((contextValue === 'chapter' || contextValue === 'quiz') && contextValue === openedContext) {
             chapterTitle = openedTitle;
           }
+          record({
+            rating: rating,
+            category: categoryEl.value,
+            categoryLabel: catLabel,
+            context: contextValue,
+            contextLabel: contextLabel,
+            chapterTitle: chapterTitle,
+            details: details
+          });
+
           var subject = buildSubject(catLabel, rating, contextLabel);
           var fullBody = buildBody(rating, catLabel, details, contextLabel, chapterTitle);
           var mailBody = fullBody;
@@ -545,6 +676,10 @@ window.HRL_FEEDBACK = (function () {
 
   return {
     open: open,
-    mount: mount
+    mount: mount,
+    record: record,
+    list: listComments,
+    setStatus: setStatus,
+    resetStore: resetCommentStore
   };
 }());
