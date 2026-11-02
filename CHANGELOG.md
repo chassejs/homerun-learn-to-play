@@ -4,6 +4,12 @@
 
 Numbering scheme: a minor update adds 0.1; a major update adds 1.0 and resets the minor to 0.
 
+## 1.4 — 2026-11-02
+
+- Admin, in the footer, is where you review feedback sent from this browser. You can mark a comment in review or resolved. The email to the club still opens as before.
+- Sign-in starts as username admin, password admin. You can add other admins and set a new password for anyone on the list. Passwords are stored as a hash on this browser.
+- The footer now shows the date this version was last updated, next to the version number.
+
 ## 1.3 — 2026-08-20
 
 - Chapter photographs load about three times faster. The tier heroes render at 256px wide but shipped at 1792px — 7x oversized, ~500 KB each to paint a thumbnail. Resized to 1200px (still ~4.7x the render size, so there is headroom if the layout ever goes full-width), cutting the set from 3.0 MB to 1.1 MB with no visible quality change.

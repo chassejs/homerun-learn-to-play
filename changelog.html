@@ -23,6 +23,7 @@
   <p><a class="changelog-back" href="index.html">← Back to the app</a></p>
   <p class="changelog-intro">This list records every released version of Homerun Learn to Play, newest first. A minor update adds 0.1; a major update adds 1.0.</p>
   <p class="changelog-current">You are reading the history for Homerun Learn to Play v<span id="changelog-current-version"></span>.</p>
+  <p class="changelog-current" id="changelog-updated-line" hidden>Last updated <time id="changelog-updated"></time>.</p>
   <div id="changelog-list"></div>
   <p><a class="changelog-back" href="index.html">← Back to the app</a></p>
 </main>
@@ -38,6 +39,18 @@
     versionEl.textContent = window.HRL_VERSION.APP_VERSION;
   }
 
+  var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  function formatDate(iso) {
+    var parts = String(iso || '').split('-');
+    if (parts.length < 3) return iso || '';
+    var year = parts[0];
+    var month = parseInt(parts[1], 10);
+    var day = parseInt(parts[2], 10);
+    if (!month || !day || month < 1 || month > 12) return iso || '';
+    return day + ' ' + months[month - 1] + ' ' + year;
+  }
+
   var list = document.getElementById('changelog-list');
   if (!list) return;
 
@@ -49,16 +62,12 @@
     return;
   }
 
-  var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-  function formatDate(iso) {
-    var parts = String(iso || '').split('-');
-    if (parts.length < 3) return iso || '';
-    var year = parts[0];
-    var month = parseInt(parts[1], 10);
-    var day = parseInt(parts[2], 10);
-    if (!month || !day || month < 1 || month > 12) return iso || '';
-    return day + ' ' + months[month - 1] + ' ' + year;
+  var updatedLine = document.getElementById('changelog-updated-line');
+  var updatedTime = document.getElementById('changelog-updated');
+  if (updatedLine && updatedTime && entries[0] && entries[0].date) {
+    updatedTime.setAttribute('datetime', String(entries[0].date));
+    updatedTime.textContent = formatDate(entries[0].date);
+    updatedLine.hidden = false;
   }
 
   var i, j;

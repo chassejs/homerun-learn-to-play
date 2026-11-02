@@ -108,6 +108,13 @@
     <div id="glossary-root"></div>
   </section>
 
+  <!-- ADMIN (footer link; not in the main nav) -->
+  <section class="view" id="view-admin">
+    <h2>Admin</h2>
+    <p class="hint">Review feedback sent from this browser, and manage who can sign in.</p>
+    <div id="admin-root"></div>
+  </section>
+
   <!-- HELP & GUIDE -->
   <section class="view" id="view-help">
     <h2>Help &amp; Guide</h2>
@@ -146,7 +153,9 @@
         <p>Found a problem, a confusing quiz question, or an idea for a later chapter? Send a note — the app writes the email and opens it in your mail app.</p>
         <p><button type="button" class="btn btn-primary" id="readme-feedback-btn">Send feedback</button></p>
         <div id="version-footer"></div>
-        <p>The version you are running is also shown in the footer. A small update adds 0.1; a larger one adds 1.0. <a href="changelog.html">Open the version history</a> for every release and what changed.</p>
+        <p>The version you are running, and the date that version was last updated, are shown in the footer. A small update adds 0.1; a larger one adds 1.0. <a href="changelog.html">Open the version history</a> for every release and what changed.</p>
+        <p><button type="button" class="btn btn-secondary" data-view="admin">Admin</button></p>
+        <p>The starting sign-in is username admin and password admin. From there you can read feedback sent on this browser, add other admins, and set a new password for anyone on the list. Passwords are stored as a hash on this browser. Lessons stay open.</p>
       </section>
 
       <section class="readme-section">
@@ -185,9 +194,11 @@
 <footer id="app-footer" class="app-footer no-print">
   <span class="app-footer-name">Homerun Learn to Play</span>
   <span class="app-footer-version">v<span id="app-version-label"></span></span>
+  <time class="app-footer-updated" id="app-updated-label" hidden>Last updated</time>
   <button type="button" id="footer-whats-new" class="app-footer-link">What's new</button>
   <a href="changelog.html" id="footer-changelog" class="app-footer-link">Version history</a>
   <button type="button" id="footer-feedback" class="app-footer-link">Send feedback</button>
+  <button type="button" id="footer-admin" class="app-footer-link" data-view="admin">Admin</button>
 </footer>
 
 <div id="modal-root"></div>
@@ -223,6 +234,7 @@
 <script src="changelog.js"></script>
 <script src="appUpdates.js"></script>
 <script src="shell.js"></script>
+<script src="admin.js"></script>
 <script>
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     navigator.serviceWorker.register('./sw.js');

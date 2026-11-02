@@ -19,14 +19,14 @@ window.HRL_VERSION = (function () {
   'use strict';
 
   // Human-facing release label shown in the UI and embedded in every backup.
-  var APP_VERSION = '1.3';
+  var APP_VERSION = '1.4';
 
   // Identity of this specific build. Unlike APP_VERSION it changes on every
   // bump, so the update check can spot a redeploy even at the same label.
-  var BUILD_ID = '7890f8c8bd';
+  var BUILD_ID = '16436998a4';
 
   // When this build was stamped, ISO-8601 UTC.
-  var BUILD_TIME = '2026-08-21T02:44:21Z';
+  var BUILD_TIME = '2026-11-02T13:59:48Z';
 
   // Governs backup/restore compatibility. Incremented independently of
   // APP_VERSION when the exported JSON payload shape changes.
